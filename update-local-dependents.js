@@ -1,5 +1,6 @@
 const chalk = require('chalk');
 const lib = require('./index');
+const nodeSundries = require('node-sundries');
 const simpleGit = require('simple-git');
 const path = require('path');
 const fs = require('fs');
@@ -7,7 +8,7 @@ let status;
 const results = [];
 
 module.exports = async function (localConfig) {
-  if (lib.argExists('--help')) {
+  if (nodeSundries.argExists('--help')) {
     // printHelp();
     return;
   }
@@ -85,7 +86,7 @@ module.exports = async function (localConfig) {
       }
     }
     if (localConfig.parentPackage.commit || localConfig.parentPackage.push) {
-      await commitPackage(parentPackageGit, localConfig.parantPackage, 'cyan');
+      await commitPackage(parentPackageGit, localConfig.parentPackage, 'cyan');
     }
     if (localConfig.parentPackage.push) {
       await pushPackage(parentPackageGit, localConfig.parentPackage, 'cyan');

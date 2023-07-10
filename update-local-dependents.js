@@ -1,19 +1,11 @@
 const chalk = require('chalk');
 const lib = require('./index');
-const nodeSundries = require('node-sundries');
 const simpleGit = require('simple-git');
 const path = require('path');
-const fs = require('fs');
-let status;
 const results = [];
 
 module.exports = async function (localConfig) {
-  if (nodeSundries.argExists('--help')) {
-    // printHelp();
-    return;
-  }
-  localConfig.parentPackage.name = path.basename(localConfig.parentPackage.localRepoPath);
-  localConfig.parentPackage.commit = localConfig.parentPackage.push ? true : localConfig.parentPackage.commit;
+  localConfig.parentPackage = lib.parsePackageConfig(localConfig.parentPackage);
   localConfig.parentPackage.updatePackageFile = localConfig.parentPackage.commit ? true : localConfig.parentPackage.updatePackageFile;
 
   try {
@@ -35,47 +27,40 @@ module.exports = async function (localConfig) {
 
     console.log(chalk.white('[ -----------------------Preliminary checks started----------------------- ]'));
 
-    await lib.initialiseRepo(localConfig.parentPackage, 'cyan', branchLockItem, localConfig.parentPackage);
+    await lib.initialiseRepo(localConfig.parentPackage, branchLockItem, localConfig.parentPackage);
     const dependentPackages = [];
 
-    const dependentPackagesFiltered = localConfig.localDependents.filter((item) => !item.skip);
-    for (const item of dependentPackagesFiltered) {
-      const repoPath = path.resolve(process.cwd(), item.localRepoPath);
-      item.localRepoPath = repoPath;
-      item.name = path.basename(item.localRepoPath);
-      item.packageName = item.packageName || path.basename(repoPath);
-      item.git = simpleGit({
-        baseDir: repoPath,
-      });
-      await lib.initialiseRepo(item, 'blue', branchLockItem, localConfig.parentPackage);
-      dependentPackages.push(item);
+    const dependentPackagesFiltered = localConfig.localDependents.filter((dependentPackage) => !dependentPackage.skip);
+    for (let dependentPackage of dependentPackagesFiltered) {
+      dependentPackage = lib.parsePackageConfig(dependentPackage);
+      await lib.initialiseRepo(dependentPackage, branchLockItem, localConfig.parentPackage);
+      dependentPackages.push(dependentPackage);
     }
 
     console.log(chalk.white('[ -----------------------Preliminary checks completed----------------------- ]'));
 
     for (const dependentPackage of dependentPackages) {
       try {
-        status = await dependentPackage.git.status();
+        const status = await dependentPackage.git.status();
         dependentPackage.hasChangesToCommit = status.files.length > 0;
 
         if (dependentPackage.hasChangesToCommit && !dependentPackage.commitMessage && dependentPackage.amendLatestCommit !== 'no-edit') {
           console.log(chalk.blue(`[${dependentPackage.name}] Skipping as there are changes to commit, but no commit message was provided.`));
           continue;
         } else {
-          await lib.commitPackage(dependentPackage, 'blue');
+          await lib.commitPackage(dependentPackage);
         }
         if (dependentPackage.push) {
-          await lib.pushPackage(dependentPackage, 'blue');
+          await lib.pushPackage(dependentPackage);
         } else if (dependentPackage.hasChangesToCommit) {
           console.log(chalk.blue(`[${dependentPackage.name}] code committed but not pushed.`));
         }
 
-        const result = {
-          app: dependentPackage.name,
-          hash: await lib.latestCommit(dependentPackage),
-        };
+        const result = dependentPackage;
+        result.commitSHA = await lib.latestCommit(dependentPackage);
+
         if ((localConfig.parentPackage.updatePackageFile || localConfig.parentPackage.push) && dependentPackage.packageName) {
-          lib.updateDependencyVersion(dependentPackage, await lib.latestCommit(dependentPackage), localConfig.parentPackage, 'blue');
+          lib.updateDependencyVersion(dependentPackage, await lib.latestCommit(dependentPackage), localConfig.parentPackage);
           result.parentPackageUpdated = true;
         }
         result.gitState = lib.gitState(dependentPackage);
@@ -85,10 +70,10 @@ module.exports = async function (localConfig) {
       }
     }
     if (localConfig.parentPackage.commit || localConfig.parentPackage.push) {
-      await lib.commitPackage(localConfig.parentPackage, 'cyan');
+      await lib.commitPackage(localConfig.parentPackage);
     }
     if (localConfig.parentPackage.push) {
-      await lib.pushPackage(localConfig.parentPackage, 'cyan');
+      await lib.pushPackage(localConfig.parentPackage);
     }
 
     if (!results.length) {
@@ -97,6 +82,7 @@ module.exports = async function (localConfig) {
     }
     const skipped = localConfig.localDependents.filter((item) => item.skip);
     await lib.logResults(results, skipped);
+    return results;
   } catch (err) {
     console.log(chalk.red(err));
   }

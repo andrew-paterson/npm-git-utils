@@ -24,9 +24,20 @@ module.exports = {
     return false;
   },
 
-  commitPackage: async function (packageConfig, logColour) {
+  parsePackageConfig(packageConfig) {
+    packageConfig.localRepoPath = path.resolve(process.cwd(), packageConfig.localRepoPath);
+    packageConfig.name = path.basename(packageConfig.localRepoPath);
+    packageConfig.git = simpleGit({
+      baseDir: packageConfig.localRepoPath,
+    });
+    packageConfig.logColour = packageConfig.logColour || 'cyan';
+    packageConfig.commit = packageConfig.push ? true : packageConfig.commit;
+    return packageConfig;
+  },
+
+  commitPackage: async function (packageConfig) {
     await packageConfig.git.add('.');
-    console.log(chalk[logColour](`[${packageConfig.name}] Added untracked files`));
+    console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Added untracked files`));
     let packageCommitMessage = packageConfig.commitMessage;
     const commitOptions = {};
     if (packageConfig.amendLatestCommit) {
@@ -39,21 +50,29 @@ module.exports = {
     const packageCommitResult = await packageConfig.git.commit(packageCommitMessage, commitOptions);
     const newSha = packageCommitResult.commit.length ? packageCommitResult.commit : null;
     if (packageConfig.amendLatestCommit === true) {
-      console.log(chalk[logColour](`[${packageConfig.name}] Amend latest commit with an updated commit message ${await this.latestCommit(packageConfig.git)}`));
+      console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Amend latest commit with an updated commit message ${await this.latestCommit(packageConfig.git)}`));
     } else if (newSha) {
       if (packageConfig.amendLatestCommit === 'no-edit') {
-        console.log(chalk[logColour](`[${packageConfig.name}] Amend latest commit the same commit message to ${newSha} in branch ${packageCommitResult.branch}: ${JSON.stringify(packageCommitResult.summary)}`));
+        console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Amend latest commit the same commit message to ${newSha} in branch ${packageCommitResult.branch}: ${JSON.stringify(packageCommitResult.summary)}`));
       } else {
-        console.log(chalk[logColour](`[${packageConfig.name}] Add commit ${newSha} in branch ${packageCommitResult.branch}: ${JSON.stringify(packageCommitResult.summary)}`));
+        console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Add commit ${newSha} in branch ${packageCommitResult.branch}: ${JSON.stringify(packageCommitResult.summary)}`));
       }
     } else {
-      console.log(chalk[logColour](`[${packageConfig.name}] Nothing to commit - head is still at ${await this.latestCommit(packageConfig)}`));
+      console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Nothing to commit - head is still at ${await this.latestCommit(packageConfig)}`));
     }
   },
 
   logResults: async function (results, skipped) {
     console.log('RESULT');
-    console.log(results);
+    console.log(
+      results.map((result) => {
+        return {
+          packageName: result.name,
+          commitSHA: result.commitSHA,
+          gitState: result.gitState,
+        };
+      })
+    );
     console.log('SKIPPED');
     const dependentPackagesSkippedGit = [];
     for (const item of skipped) {
@@ -78,7 +97,7 @@ module.exports = {
     return path.resolve(packageConfig.localRepoPath, packageConfig.npmPackageSubDir || '', 'package.json');
   },
 
-  updateDependencyVersion: function (dependentPackage, toVersion, consumingPackageConfig, logColour) {
+  updateDependencyVersion: function (dependentPackage, toVersion, consumingPackageConfig) {
     const packageFilePath = this.packageFilePath(consumingPackageConfig);
     const packageFile = require(packageFilePath);
     if (!(packageFile.dependencies || {})[dependentPackage.name] && !(packageFile.devDependencies || {})[dependentPackage.name]) {
@@ -89,15 +108,15 @@ module.exports = {
     const dependentPackagePackageLink = packageFile[depType][dependentPackage.name].split('#')[0];
 
     if (fromVersion === toVersion) {
-      console.log(chalk[logColour](`[${consumingPackageConfig.name}] Version of ${dependentPackagePackageLink} already set to ${toVersion}, no update required.`));
+      console.log(chalk[consumingPackageConfig.logColour](`[${consumingPackageConfig.name}] Version of ${dependentPackage.name} already set to ${toVersion}, no update required.`));
       return;
     }
     packageFile[depType][dependentPackage.name] = `${dependentPackagePackageLink}#${toVersion}`;
     fs.writeFileSync(packageFilePath, `${JSON.stringify(packageFile, null, 2).trim()}\n`);
-    console.log(chalk[logColour](`[${consumingPackageConfig.name}] Updated version of ${dependentPackagePackageLink} from ${fromVersion} to ${toVersion}`));
+    console.log(chalk[consumingPackageConfig.logColour](`[${consumingPackageConfig.name}] Updated version of ${dependentPackage.name} dependency from ${fromVersion} to ${toVersion}`));
   },
 
-  pushPackage: async function (packageConfig, logColour) {
+  pushPackage: async function (packageConfig) {
     const pushOptions = [];
     if (packageConfig.amendLatestCommit) {
       pushOptions.push('-f');
@@ -105,11 +124,21 @@ module.exports = {
     const parentPackagePush = await packageConfig.git.push(pushOptions);
     const pushMessage = pushOptions.indexOf('-f') > -1 ? 'Force pushed code' : 'Pushed code';
     const parentPackagePushMessage = (parentPackagePush.pushed[0] || {}).alreadyUpdated ? 'Already pushed' : pushMessage;
-    console.log(chalk[logColour](`[${packageConfig.name}] ${parentPackagePushMessage}`));
+    console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] ${parentPackagePushMessage}`));
   },
 
-  initialiseRepo: async function (packageConfig, logColour, branchLockItem, referencePackageConfig) {
-    const branch = await this.branchLockPass(packageConfig, logColour, branchLockItem, referencePackageConfig);
+  currentBranchLockItem: async function (referencePackage, branchLockArray) {
+    const currentDependentBranch = (await referencePackage.git.branch()).current;
+    const branchLockItem = branchLockArray.find((item) => item[referencePackage.name].trim() === currentDependentBranch);
+    if (!branchLockItem) {
+      console.log(chalk.yellow(`No branch lock entry exists for branch ${currentDependentBranch} in ${referencePackage.name}.`));
+      return;
+    }
+    return branchLockItem;
+  },
+
+  initialiseRepo: async function (packageConfig, branchLockItem, referencePackageConfig) {
+    const branch = await this.branchLockPass(packageConfig, branchLockItem, referencePackageConfig);
     if (!branch) {
       throw 'Error';
     }
@@ -121,31 +150,31 @@ module.exports = {
       throw `[${packageConfig.name}] ${branch} and origin/${branch} have diverged. This must be resolved before continuing.`;
     } else if (localCommits[0] === remoteCommits[0]) {
       // Local is up top date with remote
-      console.log(chalk[logColour](`[${packageConfig.name}] ${branch} is up to date with origin/${branch}.`));
+      console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] ${branch} is up to date with origin/${branch}.`));
     } else if (localCommits.indexOf(remoteCommits[0]) > -1 && remoteCommits.indexOf(localCommits[0]) < 0) {
       // Local ahead of remote
-      console.log(chalk[logColour](`[${packageConfig.name}] ${branch} is ahead of origin/${branch} and can be pushed.`));
+      console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] ${branch} is ahead of origin/${branch} and can be pushed.`));
     } else if (remoteCommits.indexOf(localCommits[0]) > -1 && localCommits.indexOf(remoteCommits[0]) < 0) {
       // Remote ahead of local
-      console.log(chalk[logColour](`[${packageConfig.name}] origin/${branch} is ahead of ${branch}.`));
+      console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] origin/${branch} is ahead of ${branch}.`));
       if ((await packageConfig.git.status()).isClean()) {
         await packageConfig.git.pull();
-        console.log(chalk[logColour](`[${packageConfig.name}] Pulled ${branch} branch.`));
+        console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Pulled ${branch} branch.`));
       } else {
         throw `[${packageConfig.name}] origin/${branch} is ahead of ${branch} but ${branch} has uncommitted changes. This must be resolved before continuing.`;
       }
     }
-    console.log(chalk[logColour](`[${packageConfig.name}] ${branch} - initialisation complete.`));
+    console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] ${branch} - initialisation complete.`));
   },
 
-  branchLockPass: async function (packageConfig, logColour, branchLockItem, referencePackageConfig) {
+  branchLockPass: async function (packageConfig, branchLockItem, referencePackageConfig) {
     try {
       if (!branchLockItem[packageConfig.name]) {
         throw `[${packageConfig.name}] Error - the branch lock entry which includes ${referencePackageConfig.name}: ${branchLockItem[referencePackageConfig.name]}" does not specify a branch for ${packageConfig.name}.`;
       }
       const currentAppBranch = (await packageConfig.git.branch()).current;
       if (branchLockItem[packageConfig.name] !== currentAppBranch) {
-        console.log(chalk[logColour](`[${packageConfig.name}] Switching from branch "${currentAppBranch}" to "${branchLockItem[packageConfig.name]}" as per branch lock entry.`));
+        console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Switching from branch "${currentAppBranch}" to "${branchLockItem[packageConfig.name]}" as per branch lock entry.`));
         await packageConfig.git.checkout(branchLockItem[packageConfig.name]);
       }
       return (await packageConfig.git.branch()).current;
@@ -160,7 +189,7 @@ module.exports = {
     return ((gitLog.all || [])[0] || {}).hash;
   },
 
-  bumpVersion: async function (packageConfig, logColour) {
+  bumpVersion: async function (packageConfig) {
     const packageFilePath = this.packageFilePath(packageConfig);
     const packageFile = require(packageFilePath);
     const status = await packageConfig.git.status();
@@ -174,26 +203,27 @@ module.exports = {
     const currentVersionNumber = (currentVersion.match(/(\d+.\d+.\d+)/) || [])[0];
     if (packageConfig.preReleaseType) {
       const suffix = `${packageConfig.preReleaseType}.${moment().format('YYYYMMDDHHmm')}`;
-      return `${currentVersionNumber}-${suffix}`;
+      packageFile.version = `${currentVersionNumber}-${suffix}`;
+    } else {
+      const releaseType = packageConfig.releaseType || 'patch';
+      const releaseTypes = ['major', 'minor', 'patch'];
+      const matchIndex = releaseTypes.indexOf(releaseType);
+      const numbers = currentVersion.match(/(\d*)\.(\d*)\.(\d*)/);
+      const newVersion = releaseTypes
+        .map((_, index) => {
+          if (index < matchIndex) {
+            return numbers[index + 1];
+          } else if (index === matchIndex) {
+            return parseInt(numbers[index + 1]) + 1;
+          } else {
+            return '0';
+          }
+        })
+        .join('.');
+      packageFile.version = newVersion;
     }
-    const releaseType = packageConfig.releaseType || 'patch';
-    const releaseTypes = ['major', 'minor', 'patch'];
-    const matchIndex = releaseTypes.indexOf(releaseType);
-    const numbers = currentVersion.match(/(\d*)\.(\d*)\.(\d*)/);
-    const newVersion = releaseTypes
-      .map((_, index) => {
-        if (index < matchIndex) {
-          return numbers[index + 1];
-        } else if (index === matchIndex) {
-          return parseInt(numbers[index + 1]) + 1;
-        } else {
-          return '0';
-        }
-      })
-      .join('.');
-    packageFile.version = newVersion;
     fs.writeFileSync(packageFilePath, `${JSON.stringify(packageFile, null, 2).trim()}\n`);
-    console.log(chalk[logColour](`[${packageConfig.name}] Updated version to ${packageFile.version} in package.json.`));
+    console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Updated version to ${packageFile.version} in package.json.`));
     return packageFile;
   },
 };

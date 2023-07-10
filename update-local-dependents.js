@@ -17,11 +17,13 @@ module.exports = async function (localConfig) {
   localConfig.parentPackage.updatePackageFile = localConfig.parentPackage.commit ? true : localConfig.parentPackage.updatePackageFile;
 
   try {
-    const parentPackageDir = path.resolve(process.cwd());
-    const parentPackageGit = simpleGit({
+    const parentPackageDir = path.resolve(process.cwd(), localConfig.parentPackage.localRepoPath);
+    console.log(parentPackageDir);
+
+    localConfig.parentPackage.git = simpleGit({
       baseDir: parentPackageDir,
     });
-    const currentParentPackageBranch = (await parentPackageGit.branch()).current;
+    const currentParentPackageBranch = (await localConfig.parentPackage.git.branch()).current;
     const branchLockItem = localConfig.branchLock.find((item) => item[localConfig.parentPackage.name].trim() === currentParentPackageBranch);
     if (!branchLockItem) {
       console.log(chalk.cyan(`Stopping as no branch lock entry exists for branch ${currentParentPackageBranch} in ${localConfig.parentPackage.name}.`));
@@ -33,7 +35,7 @@ module.exports = async function (localConfig) {
 
     console.log(chalk.white('[ -----------------------Preliminary checks started----------------------- ]'));
 
-    await lib.initialiseRepo(localConfig.parentPackage.name, parentPackageGit, 'cyan', branchLockItem, localConfig);
+    await lib.initialiseRepo(localConfig.parentPackage, 'cyan', branchLockItem, localConfig.parentPackage);
     const dependentPackages = [];
 
     const dependentPackagesFiltered = localConfig.localDependents.filter((item) => !item.skip);
@@ -45,7 +47,7 @@ module.exports = async function (localConfig) {
       item.git = simpleGit({
         baseDir: repoPath,
       });
-      await lib.initialiseRepo(item.name, item.git, 'blue', branchLockItem, localConfig);
+      await lib.initialiseRepo(item, 'blue', branchLockItem, localConfig.parentPackage);
       dependentPackages.push(item);
     }
 
@@ -60,20 +62,20 @@ module.exports = async function (localConfig) {
           console.log(chalk.blue(`[${dependentPackage.name}] Skipping as there are changes to commit, but no commit message was provided.`));
           continue;
         } else {
-          await lib.commitPackage(dependentPackage.git, dependentPackage, 'blue');
+          await lib.commitPackage(dependentPackage, 'blue');
         }
         if (dependentPackage.push) {
-          await lib.pushPackage(dependentPackage.git, dependentPackage, 'blue');
+          await lib.pushPackage(dependentPackage, 'blue');
         } else if (dependentPackage.hasChangesToCommit) {
           console.log(chalk.blue(`[${dependentPackage.name}] code committed but not pushed.`));
         }
 
         const result = {
           app: dependentPackage.name,
-          hash: await lib.latestCommit(dependentPackage.git),
+          hash: await lib.latestCommit(dependentPackage),
         };
         if ((localConfig.parentPackage.updatePackageFile || localConfig.parentPackage.push) && dependentPackage.packageName) {
-          lib.updatePackageVersion(dependentPackage, await lib.latestCommit(dependentPackage.git), localConfig.parentPackage);
+          lib.updateDependencyVersion(dependentPackage, await lib.latestCommit(dependentPackage), localConfig.parentPackage, 'blue');
           result.parentPackageUpdated = true;
         }
         result.gitState = lib.gitState(dependentPackage);
@@ -83,17 +85,18 @@ module.exports = async function (localConfig) {
       }
     }
     if (localConfig.parentPackage.commit || localConfig.parentPackage.push) {
-      await lib.commitPackage(parentPackageGit, localConfig.parentPackage, 'cyan');
+      await lib.commitPackage(localConfig.parentPackage, 'cyan');
     }
     if (localConfig.parentPackage.push) {
-      await lib.pushPackage(parentPackageGit, localConfig.parentPackage, 'cyan');
+      await lib.pushPackage(localConfig.parentPackage, 'cyan');
     }
 
     if (!results.length) {
       console.log(chalk.yellow('No dependent packages were updated'));
       return;
     }
-    await lib.logResults(results, localConfig);
+    const skipped = localConfig.localDependents.filter((item) => item.skip);
+    await lib.logResults(results, skipped);
   } catch (err) {
     console.log(chalk.red(err));
   }

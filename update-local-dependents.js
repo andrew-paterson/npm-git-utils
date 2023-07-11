@@ -30,7 +30,7 @@ module.exports = async function (localConfig) {
     await lib.initialiseRepo(localConfig.parentPackage, branchLockItem, localConfig.parentPackage);
     const dependentPackages = [];
 
-    const dependentPackagesFiltered = localConfig.localDependents.filter((dependentPackage) => !dependentPackage.skip);
+    const dependentPackagesFiltered = localConfig.localDependencies.filter((dependentPackage) => !dependentPackage.skip);
     for (let dependentPackage of dependentPackagesFiltered) {
       dependentPackage = lib.parsePackageConfig(dependentPackage);
       await lib.initialiseRepo(dependentPackage, branchLockItem, localConfig.parentPackage);
@@ -80,7 +80,7 @@ module.exports = async function (localConfig) {
       console.log(chalk.yellow('No dependent packages were updated'));
       return;
     }
-    const skipped = localConfig.localDependents.filter((item) => item.skip);
+    const skipped = localConfig.localDependencies.filter((item) => item.skip);
     await lib.logResults(results, skipped);
     return results;
   } catch (err) {

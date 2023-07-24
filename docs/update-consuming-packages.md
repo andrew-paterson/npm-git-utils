@@ -5,7 +5,7 @@ Updates the SHA of the dependency in the package.json files in one or more consu
 Optionally commits and pushed the consuming NPM projects.
 
 ```
-const updateConsumingPackages = require('npm-dependency-utils/update-consuming-packages');
+const updateConsumingPackages = require('npm-git-utils/update-consuming-packages');
 const options = = {
   dependentPackage: {
     localRepoPath: './shared-dependency', // Path to the git repo of the NPM dependency.
@@ -22,6 +22,7 @@ const options = = {
       push: true, // Optional, default = false. If true, the repo will be pushed to origin. Forces the commit option to true if true.
       releaseType: 'minor', // Optional, default = 'patch', can be 'minor' or 'major' as well. defines how the version is bumped in the consuming package.json file.
       logColour: 'green', // Optional, default = 'cyan'. Colour of the console log messages relating to the NPM dependency.
+      customEditsFunc: async function updateDepsTest( packageConfig, dependentPackage, dependentPackageVersion) {} // Optional. Must be an async function, which runs after the consuming package's package.json file has been updates, but before the consuming package is committed.
     },
     {
       localRepoPath: './consuming-project-2',

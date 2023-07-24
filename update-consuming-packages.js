@@ -31,9 +31,12 @@ module.exports = async function (localConfig) {
     for (const consumingPackage of consumingPackages) {
       try {
         const result = consumingPackage;
-        lib.updateDependencyVersion(localConfig.dependentPackage, await lib.latestCommit(localConfig.dependentPackage), consumingPackage);
-
+        const dependentPackageVersion = await lib.latestCommit(localConfig.dependentPackage);
+        lib.updateDependencyVersion(localConfig.dependentPackage, dependentPackageVersion, consumingPackage);
         await lib.bumpVersion(consumingPackage);
+        if (consumingPackage.customEditsFunc) {
+          await consumingPackage.customEditsFunc(consumingPackage, localConfig.dependentPackage, dependentPackageVersion);
+        }
         if (consumingPackage.commit) {
           await lib.commitPackage(consumingPackage);
         }
@@ -49,10 +52,7 @@ module.exports = async function (localConfig) {
         console.log(chalk.red(err));
       }
     }
-    if (!results.length) {
-      console.log(chalk.yellow('No consuming apps were updated'));
-      return;
-    }
+
     const skipped = localConfig.localConsumingPackages.filter((item) => item.skip);
     await lib.logResults(results, skipped);
     return results;

@@ -5,7 +5,7 @@ Updates the commit SHA of each updated dependency in the package.json file in th
 Optionally commits and pushed the consuming NPM project.
 
 ```
-const updateLocalDependencies = require('npm-dependency-utils/update-local-dependents');
+const updateLocalDependencies = require('npm-git-utils/update-local-dependents');
 const options = = {
   parentPackage: {
     localRepoPath: './consuming-npm-project', // Path to the git repo of the NPM dependency.

@@ -45,7 +45,7 @@ module.exports = async function (localConfig) {
         dependentPackage.hasChangesToCommit = status.files.length > 0;
 
         if (dependentPackage.hasChangesToCommit && !dependentPackage.commitMessage && dependentPackage.amendLatestCommit !== 'no-edit') {
-          console.log(chalk.blue(`[${dependentPackage.name}] Skipping as there are changes to commit, but no commit message was provided.`));
+          console.log(chalk[dependentPackage.logColour](`[${dependentPackage.name}] Skipping as there are changes to commit, but no commit message was provided.`));
           continue;
         } else {
           await lib.commitPackage(dependentPackage);
@@ -53,13 +53,13 @@ module.exports = async function (localConfig) {
         if (dependentPackage.push) {
           await lib.pushPackage(dependentPackage);
         } else if (dependentPackage.hasChangesToCommit) {
-          console.log(chalk.blue(`[${dependentPackage.name}] code committed but not pushed.`));
+          console.log(chalk[dependentPackage.logColour](`[${dependentPackage.name}] code committed but not pushed.`));
         }
 
         const result = dependentPackage;
         result.commitSHA = await lib.latestCommit(dependentPackage);
 
-        if ((localConfig.parentPackage.updatePackageFile || localConfig.parentPackage.push) && dependentPackage.packageName) {
+        if (localConfig.parentPackage.updatePackageFile || localConfig.parentPackage.push) {
           lib.updateDependencyVersion(dependentPackage, await lib.latestCommit(dependentPackage), localConfig.parentPackage);
           result.parentPackageUpdated = true;
         }

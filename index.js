@@ -50,15 +50,15 @@ module.exports = {
     const packageCommitResult = await packageConfig.git.commit(packageCommitMessage, commitOptions);
     const newSha = packageCommitResult.commit.length ? packageCommitResult.commit : null;
     if (packageConfig.amendLatestCommit === true) {
-      console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Amend latest commit with an updated commit message ${await this.latestCommit(packageConfig.git)}`));
+      console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Amend latest commit with an updated commit message ${await this.latestCommitHash(packageConfig.git)}`));
     } else if (newSha) {
       if (packageConfig.amendLatestCommit === 'no-edit') {
-        console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Amend latest commit the same commit message to ${newSha} in branch ${packageCommitResult.branch}: ${JSON.stringify(packageCommitResult.summary)}`));
+        console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Amend latest commit with the same commit message to ${newSha} in branch ${packageCommitResult.branch}: ${JSON.stringify(packageCommitResult.summary)}`));
       } else {
         console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Add commit ${newSha} in branch ${packageCommitResult.branch}: ${JSON.stringify(packageCommitResult.summary)}`));
       }
     } else {
-      console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Nothing to commit - head is still at ${await this.latestCommit(packageConfig)}`));
+      console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Nothing to commit - head is still at ${await this.latestCommitHash(packageConfig)}`));
     }
   },
 
@@ -68,8 +68,8 @@ module.exports = {
       results.map((result) => {
         return {
           packageName: result.name,
-          commitSHA: result.commitSHA,
-          gitState: result.gitState,
+          latestCommitSHA: result.commitSHA,
+          latestCommitMessage: result.latestCommitMessage,
         };
       })
     );
@@ -186,7 +186,11 @@ module.exports = {
 
   latestCommit: async function (packageConfig) {
     const gitLog = await packageConfig.git.log();
-    return ((gitLog.all || [])[0] || {}).hash;
+    return (gitLog.all || [])[0] || {};
+  },
+
+  latestCommitHash: async function (packageConfig) {
+    return (await this.latestCommit(packageConfig)).hash;
   },
 
   bumpVersion: async function (packageConfig) {

@@ -31,7 +31,7 @@ module.exports = async function (localConfig) {
     for (const consumingPackage of consumingPackages) {
       try {
         const result = consumingPackage;
-        const dependentPackageVersion = await lib.latestCommit(localConfig.dependentPackage);
+        const dependentPackageVersion = await lib.latestCommitHash(localConfig.dependentPackage);
         lib.updateDependencyVersion(localConfig.dependentPackage, dependentPackageVersion, consumingPackage);
         await lib.bumpVersion(consumingPackage);
         if (consumingPackage.customEditsFunc) {
@@ -45,7 +45,9 @@ module.exports = async function (localConfig) {
         } else if (consumingPackage.commit) {
           console.log(chalk.blue(`[${consumingPackage.name}] code committed but not pushed.`));
         }
-        result.commitSHA = await lib.latestCommit(consumingPackage);
+        result.commitSHA = await lib.latestCommitHash(consumingPackage);
+        result.latestCommitMessage = (await lib.latestCommit(consumingPackage)).message;
+
         result.gitState = lib.gitState(consumingPackage);
         results.push(result);
       } catch (err) {

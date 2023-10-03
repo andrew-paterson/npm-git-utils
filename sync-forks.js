@@ -25,6 +25,7 @@ module.exports = async function (repoPaths) {
     try {
       const currentBranch = (await repo.main.git.branch()).current;
       const upstreamBranch = `upstream/${currentBranch}`;
+      await repo.fork.git.fetch('upstream');
       console.log(chalk[repo.logColour](`[${repo.fork.path}] Fetched upstream.`));
       await repo.fork.git.checkout(currentBranch);
       const currentLatestCommit = await lib.latestCommit(repo.fork);

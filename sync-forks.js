@@ -25,12 +25,13 @@ module.exports = async function (repoPaths) {
     try {
       const currentBranch = (await repo.main.git.branch()).current;
       const upstreamBranch = `upstream/${currentBranch}`;
-      await repo.fork.git.fetch('upstream');
+      await repo.fork.git.fetch();
       console.log(chalk[repo.logColour](`[${repo.fork.path}] Fetched upstream.`));
       await repo.fork.git.checkout(currentBranch);
       const currentLatestCommit = await lib.latestCommit(repo.fork);
-      console.log(chalk[repo.logColour](`[${repo.fork.path}] Checkout out ${currentBranch}.`));
+      console.log(chalk[repo.logColour](`[${repo.fork.path}] Checkout ${currentBranch}.`));
       await repo.fork.git.mergeFromTo(`upstream/${currentBranch}`, currentBranch);
+      console.log(chalk[repo.logColour](`[${repo.fork.path}] Merge upstream/${currentBranch} into ${currentBranch}.`));
       const newLatestCommit = await lib.latestCommit(repo.fork);
       if (currentLatestCommit.hash === newLatestCommit.hash) {
         console.log(chalk[repo.logColour](`[${repo.fork.path}] No upstream changes to merge in ${currentBranch}.`));

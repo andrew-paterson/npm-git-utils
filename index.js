@@ -193,6 +193,40 @@ module.exports = {
     return (await this.latestCommit(packageConfig)).hash;
   },
 
+  async latestTag(packageConfig) {
+    const tags = await packageConfig.git.tag(['--sort=-creatordate']);
+    const tagList = tags.split('\n');
+    return tagList[0];
+  },
+
+  async tagLatestCommit(packageConfig) {
+    let newTag;
+    if (packageConfig.tagName) {
+      newTag = packageConfig.tagName;
+    } else {
+      const packageFilePath = this.packageFilePath(packageConfig);
+      const packageFile = require(packageFilePath);
+      newTag = packageFile.version;
+    }
+    const tagArgs = packageConfig.tagMessage ? ['-a', newTag, '-m', packageConfig.tagMessage] : [newTag];
+    if (!this.tagExists(packageConfig, newTag)) {
+      await packageConfig.git.tag(tagArgs);
+      console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Added tag ${newTag} to latest commit.`));
+    } else {
+      console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Tag ${newTag} already exists.`));
+    }
+    if (packageConfig.pushTags !== false) {
+      await packageConfig.git.push(['--tags']);
+      console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Pushed tags.`));
+    }
+    return newTag;
+  },
+
+  async tagExists(packageConfig, tagName) {
+    const tags = await packageConfig.git.tag(['--list']);
+    return tags.split('\n').includes(tagName);
+  },
+
   bumpVersion: async function (packageConfig) {
     const packageFilePath = this.packageFilePath(packageConfig);
     const packageFile = require(packageFilePath);

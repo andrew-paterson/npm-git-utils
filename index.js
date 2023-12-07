@@ -209,7 +209,7 @@ module.exports = {
       newTag = packageFile.version;
     }
     const tagArgs = packageConfig.tagMessage ? ['-a', newTag, '-m', packageConfig.tagMessage] : [newTag];
-    if (!this.tagExists(packageConfig, newTag)) {
+    if (!(await this.tagExists(packageConfig, newTag))) {
       await packageConfig.git.tag(tagArgs);
       console.log(chalk[packageConfig.logColour](`[${packageConfig.name}] Added tag ${newTag} to latest commit.`));
     } else {
@@ -232,11 +232,9 @@ module.exports = {
     const packageFile = require(packageFilePath);
     const status = await packageConfig.git.status();
     const hasChangesToCommit = status.files.length > 0;
-
     if (!hasChangesToCommit) {
       return;
     }
-
     const currentVersion = packageFile.version;
     const currentVersionNumber = (currentVersion.match(/(\d+.\d+.\d+)/) || [])[0];
     if (packageConfig.preReleaseType) {

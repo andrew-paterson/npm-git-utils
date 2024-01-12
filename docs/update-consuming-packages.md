@@ -6,7 +6,7 @@ Optionally commits and pushed the consuming NPM projects.
 
 ```
 const updateConsumingPackages = require('npm-git-utils/update-consuming-packages');
-const options = = {
+const options = {
   dependentPackage: {
     localRepoPath: './shared-dependency', // Path to the git repo of the NPM dependency.
     commitMessage: 'Update styles', // Commit message for the NPM dependency

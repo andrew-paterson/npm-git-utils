@@ -1,5 +1,5 @@
 const getGitInfo = require('git-repo-info');
-var gitState = require('git-state');
+const gitState = require('git-state');
 const fs = require('fs');
 const path = require('path');
 const chalk = require('chalk');
@@ -10,14 +10,22 @@ module.exports = function (environment, ENV, deps, localDevRepos) {
     deps.forEach((dep) => {
       checkDep(dep, ENV);
     });
-    console.log(`----------------------------------\n${chalk.magenta(`DEPENDENCY VERSIONS`)}\n`);
+    console.log(
+      `----------------------------------\n${chalk.magenta(
+        `DEPENDENCY VERSIONS`
+      )}\n`
+    );
     console.log(ENV.dependencySummary);
     if (!ENV.symlinks) {
       console.log(`----------------------------------`);
     }
 
     if (ENV.symlinks) {
-      console.log(`----------------------------------\n${chalk.magenta(`SYMLINKS DETECTED`)}\n`);
+      console.log(
+        `----------------------------------\n${chalk.magenta(
+          `SYMLINKS DETECTED`
+        )}\n`
+      );
       console.log(ENV.symlinks);
       console.log(`----------------------------------`);
     }
@@ -49,7 +57,9 @@ function checkLocalDevRepos(localDevRepos) {
         }
       }
       output[depName] = gitStatus || {};
-      output[depName].lastCommit = `${gitInfo.abbreviatedSha} "${gitInfo.commitMessage}"`;
+      output[
+        depName
+      ].lastCommit = `${gitInfo.abbreviatedSha} "${gitInfo.commitMessage}"`;
     }
     if (repo.dependencyOf) {
       parentName = path.basename(repo.dependencyOf);
@@ -65,7 +75,9 @@ function checkLocalDevRepos(localDevRepos) {
       depWarnings.push(`is symlinked in ${parentName}`);
     }
     if (depWarnings.length) {
-      console.log(chalk.red(`WARNING: ${depName} ${depWarnings.join(' and ')}.`));
+      console.log(
+        chalk.red(`WARNING: ${depName} ${depWarnings.join(' and ')}.`)
+      );
     }
   });
   console.log(output);
@@ -97,22 +109,35 @@ function checkGitState(path) {
 
 function installedMatchesRequired(packageFilePath, depName) {
   try {
-    const parentPackageName = (packageFilePath.match(/.*?node_modules\/(.*?)\/package\.json/) || [])[1];
+    const parentPackageName = (packageFilePath.match(
+      /.*?node_modules\/(.*?)\/package\.json/
+    ) || [])[1];
     const packageFile = require(packageFilePath);
     const packageLockFilePath = `${process.cwd()}/package-lock.json`;
     const packageLockFile = require(packageLockFilePath);
-    const packageDep = packageFile.devDependencies[depName] || packageFile.dependencies[depName];
+    const packageDep =
+      packageFile.devDependencies[depName] || packageFile.dependencies[depName];
     if (!packageDep) {
       return 'Not installed';
     }
-    const packageLockListing = packageLockFile.dependencies[depName] || ((packageLockFile.dependencies[parentPackageName] || {}).dependencies || {})[depName];
+    const packageLockListing =
+      packageLockFile.packages[`node_modules/${depName}`] ||
+      ((packageLockFile.packages[`node_modules/${parentPackageName}`] || {})
+        .dependencies || {})[`node_modules/${depName}`];
     if (packageLockListing) {
-      if (packageLockListing.from.split('#')[1] === packageDep.split('#')[1]) {
-        return packageLockListing.from.split('#')[1];
+      if (
+        packageLockListing.resolved.split('#')[1] === packageDep.split('#')[1]
+      ) {
+        return packageLockListing.resolved.split('#')[1];
+      }
+      if (packageLockListing.version === packageDep.split('#')[1]) {
+        return packageLockListing.version;
       }
       return {
-        installed: `${packageLockListing.from.split('#')[1]} <= ${packageLockFilePath.replace(process.cwd(), '')}`,
-        _required: `${packageDep.split('#')[1]} <= ${packageFilePath.replace(process.cwd(), '')}`,
+        'package.json': packageDep.split('#')[1],
+        'package-lock.json': `resolved === ${
+          packageLockListing.resolved.split('#')[1]
+        }, version === ${packageLockListing.version}`,
       };
     } else {
       console.log(`${depName} not in package-lock`);
@@ -136,15 +161,23 @@ function checkDep(dep, ENV) {
     dep.children.forEach((child) => {
       const pathToChild = `${pathToDep}/node_modules/${child}`;
       if (isSymlink(pathToChild)) {
-        currentSymlink.symlinkedChildren.push(`${child} (${checkGitState(pathToChild)})`);
+        currentSymlink.symlinkedChildren.push(
+          `${child} (${checkGitState(pathToChild)})`
+        );
       }
     });
     ENV.symlinks.push(currentSymlink);
   }
   ENV.dependencySummary[dep.name] = {};
-  ENV.dependencySummary[dep.name] = installedMatchesRequired(appPackageFilePath, dep.name);
+  ENV.dependencySummary[dep.name] = installedMatchesRequired(
+    appPackageFilePath,
+    dep.name
+  );
   dep.children.forEach((child) => {
     ENV.dependencySummary[child] = {};
-    ENV.dependencySummary[child] = installedMatchesRequired(depPackageFilePath, child);
+    ENV.dependencySummary[child] = installedMatchesRequired(
+      depPackageFilePath,
+      child
+    );
   });
 }

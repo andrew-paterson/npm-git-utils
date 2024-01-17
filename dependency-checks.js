@@ -34,6 +34,7 @@ module.exports = function (environment, ENV, deps, localDevRepos) {
       deps.forEach((dep) => {
         checkDep(dep, ENV);
       });
+
       console.log(
         `----------------------------------\n${chalk.magenta(
           'DEPENDENCY VERSIONS'
@@ -55,10 +56,13 @@ module.exports = function (environment, ENV, deps, localDevRepos) {
   }
 };
 
-function allPnpmDeps(filePath, depTypes = ['dependencies', 'devDependencies']) {
+function pnpmLockAsJson(filePath) {
   const json = nodeSundries.yamlFileToJs(`${filePath}/pnpm-lock.yaml`);
-  fs.writeFileSync('./trash.json', JSON.stringify(json, null, 2));
+  return Array.isArray(json) ? json[0] : json;
+}
 
+function allPnpmDeps(filePath, depTypes = ['dependencies', 'devDependencies']) {
+  const json = pnpmLockAsJson(filePath);
   const packageFile = require(path.resolve(
     process.cwd(),
     filePath,
@@ -150,8 +154,6 @@ function extractVersion(string) {
   if (extractSemverString(string)) {
     return extractSemverString(string);
   }
-  console.log(string);
-
   return false;
 }
 
@@ -175,6 +177,7 @@ function checkDep(dep, ENV) {
   const final = {
     version: specifiedMatchesInstalledDep(pnpmDep),
   };
+
   if (dep.children) {
     final.children = processChildPackages(pnpmDep, dep.children);
   }
@@ -213,7 +216,7 @@ function processChildOfLinkedPackage(pnpmDep, child) {
 function processChildPackage(parentDep, childPackage, filePath) {
   const childDepName =
     typeof childPackage === 'string' ? childPackage : childPackage.name;
-  const json = nodeSundries.yamlFileToJs(`${filePath}/pnpm-lock.yaml`);
+  const json = pnpmLockAsJson(filePath);
   let parentPackage;
   const final = {};
   for (const key in json.packages) {

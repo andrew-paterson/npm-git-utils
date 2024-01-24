@@ -1,17 +1,18 @@
 const getGitInfo = require('git-repo-info');
 const gitState = require('git-state');
-const fs = require('fs');
 const path = require('path');
 const chalk = require('chalk');
 const nodeSundries = require('node-sundries');
 const util = require('util');
-const { type } = require('os');
+const lib = require('./index');
 
 module.exports = function (environment, ENV, deps, localDevRepos) {
   try {
     const linkedDeps = filterProperties(getLocalLinks(process.cwd()), [
+      // Thnis also defined the order of the props
       'name',
       'absolutePath',
+      'gitState',
       'children',
     ]);
     if (linkedDeps.length) {

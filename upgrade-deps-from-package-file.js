@@ -2,6 +2,8 @@ const fs = require('fs');
 const chalk = require('chalk');
 const merge = require('lodash.merge');
 const semver = require('semver');
+const lib = require('./index');
+
 module.exports = function (
   packageFileToEditPath,
   newVersionDefaultPackageFilePath,
@@ -121,7 +123,9 @@ module.exports = function (
         newVersionDefaultPackageFile[depType],
         nonDefaultDeps[depType]
       );
-      packageFileToEdit[depType] = sortObjectKeys(packageFileToEdit[depType]);
+      packageFileToEdit[depType] = lib.sortObjectKeys(
+        packageFileToEdit[depType]
+      );
     }
   });
 
@@ -170,13 +174,4 @@ function getUniqueDependencies(
     }
   });
   return uniqueDeps;
-}
-
-function sortObjectKeys(obj) {
-  return Object.keys(obj)
-    .sort()
-    .reduce((result, key) => {
-      result[key] = obj[key];
-      return result;
-    }, {});
 }

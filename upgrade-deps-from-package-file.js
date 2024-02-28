@@ -34,12 +34,12 @@ module.exports = function (
   );
   console.log(opts.removePackages);
 
-  const nonDefaultDeps = getUniqueDependencies(
+  const nonDefaultDeps = lib.getUniqueDependencies(
     packageFileToEdit,
     merge({}, currentVersionDefaultPackageFile, newVersionDefaultPackageFile)
   );
 
-  const removedDefaults = getUniqueDependencies(
+  const removedDefaults = lib.getUniqueDependencies(
     currentVersionDefaultPackageFile,
     newVersionDefaultPackageFile
   );
@@ -91,22 +91,24 @@ module.exports = function (
     });
     const packageUpgradeFeedback = [];
     ['dependencies', 'devDependencies'].forEach((depType) => {
-      Object.keys(nonDefaultDeps[depType]).forEach((dep) => {
-        if (highestVersions[dep]) {
-          const updatedVersion = highestVersion(
-            highestVersions[dep],
-            nonDefaultDeps[depType][dep]
-          );
-          if (updatedVersion !== nonDefaultDeps[depType][dep]) {
-            packageUpgradeFeedback.push({
-              dep: dep,
-              oldVersion: nonDefaultDeps[depType][dep],
-              newVersion: updatedVersion,
-            });
-            nonDefaultDeps[depType][dep] = updatedVersion;
+      if (nonDefaultDeps[depType]) {
+        Object.keys(nonDefaultDeps[depType]).forEach((dep) => {
+          if (highestVersions[dep]) {
+            const updatedVersion = highestVersion(
+              highestVersions[dep],
+              nonDefaultDeps[depType][dep]
+            );
+            if (updatedVersion !== nonDefaultDeps[depType][dep]) {
+              packageUpgradeFeedback.push({
+                dep: dep,
+                oldVersion: nonDefaultDeps[depType][dep],
+                newVersion: updatedVersion,
+              });
+              nonDefaultDeps[depType][dep] = updatedVersion;
+            }
           }
-        }
-      });
+        });
+      }
     });
     console.log(
       chalk.magenta(
@@ -151,27 +153,4 @@ function highestVersion(string1, string2) {
   const version1 = string1.replace(/[^0-9.]/g, '');
   const version2 = string2.replace(/[^0-9.]/g, '');
   return semver.gt(version2, version1) ? string2 : string1;
-}
-
-function getUniqueDependencies(
-  packageFileToCheck,
-  newVersionDefaultPackageFile
-) {
-  let uniqueDeps;
-  ['dependencies', 'devDependencies'].forEach((depType) => {
-    if (packageFileToCheck[depType]) {
-      uniqueDeps = uniqueDeps || {};
-      uniqueDeps[depType] = Object.keys(packageFileToCheck[depType])
-        .filter(
-          (dep) =>
-            !newVersionDefaultPackageFile[depType] ||
-            !newVersionDefaultPackageFile[depType][dep]
-        )
-        .reduce((obj, dep) => {
-          obj[dep] = packageFileToCheck[depType][dep];
-          return obj;
-        }, {});
-    }
-  });
-  return uniqueDeps;
 }

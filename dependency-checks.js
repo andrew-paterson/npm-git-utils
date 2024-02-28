@@ -95,6 +95,9 @@ function allPnpmDeps(filePath, depTypes = ['dependencies', 'devDependencies']) {
 }
 
 function specifiedMatchesInstalledDep(item) {
+  if (!item) {
+    return;
+  }
   if (item.linked) {
     return `Linked locally to ${item.absolutePath} ${item.gitState}`;
   }
@@ -284,6 +287,7 @@ function checkLocalDevRepos(localDevRepos) {
         }
       }
       output[depName] = gitStatus || {};
+      output[depName].currentBranch = gitInfo.branch;
       output[
         depName
       ].lastCommit = `${gitInfo.abbreviatedSha} "${gitInfo.commitMessage}"`;

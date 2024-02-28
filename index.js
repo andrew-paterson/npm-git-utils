@@ -429,13 +429,8 @@ module.exports = {
     return packageFile;
   },
 
-  isPrimitive(item) {
-    return (
-      typeof item === 'string' ||
-      typeof item === 'number' ||
-      item === null ||
-      item === undefined
-    );
+  isPrimitive(test) {
+    return test !== Object(test);
   },
 
   sortObjectKeys(obj, opts = {}) {
@@ -458,5 +453,26 @@ module.exports = {
       }, final);
     });
     return final;
+  },
+
+  getUniqueDependencies(packageFileToCheck, newVersionDefaultPackageFile) {
+    let uniqueDeps;
+    ['dependencies', 'devDependencies'].forEach((depType) => {
+      if (packageFileToCheck[depType]) {
+        uniqueDeps = uniqueDeps || {};
+        uniqueDeps[depType] = Object.keys(packageFileToCheck[depType])
+          .filter(
+            (dep) =>
+              !newVersionDefaultPackageFile[depType] ||
+              !newVersionDefaultPackageFile[depType][dep]
+          )
+          .reduce((obj, dep) => {
+            obj[dep] = packageFileToCheck[depType][dep];
+            return obj;
+          }, {});
+        // console.log(uniqueDeps);
+      }
+    });
+    return uniqueDeps;
   },
 };

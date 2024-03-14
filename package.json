@@ -1,12 +1,12 @@
 {
   "name": "npm-git-utils",
-  "version": "1.0.20",
+  "version": "1.0.21",
   "description": "A collection of node utility functions which help to automate the the process of committing and pushing NPM packages with git, updating dependency versions in package.json files, and viewing the git state of local repos",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "respository": {
+  "repository": {
     "type": "git",
     "url": "https://github.com/andrew-paterson/npm-git-utils.git"
   },

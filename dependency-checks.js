@@ -288,9 +288,7 @@ function checkLocalDevRepos(localDevRepos) {
       }
       output[depName] = gitStatus || {};
       output[depName].currentBranch = gitInfo.branch;
-      output[
-        depName
-      ].lastCommit = `${gitInfo.abbreviatedSha} "${gitInfo.commitMessage}"`;
+      output[depName].lastCommit = `${gitInfo.sha} "${gitInfo.commitMessage}"`;
     }
   });
   console.log(output);

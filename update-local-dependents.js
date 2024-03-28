@@ -6,46 +6,100 @@ const results = [];
 
 module.exports = async function (localConfig) {
   localConfig.parentPackage = lib.parsePackageConfig(localConfig.parentPackage);
-  localConfig.parentPackage.updatePackageFile = localConfig.parentPackage.commit ? true : localConfig.parentPackage.updatePackageFile;
+  localConfig.parentPackage.updatePackageFile = localConfig.parentPackage.commit
+    ? true
+    : localConfig.parentPackage.updatePackageFile;
 
   try {
-    const parentPackageDir = path.resolve(process.cwd(), localConfig.parentPackage.localRepoPath);
+    const dependentPackagesFiltered = localConfig.localDependencies.filter(
+      (dependentPackage) => !dependentPackage.skip
+    );
+    console.log(dependentPackagesFiltered);
+    const parentPackageDir = path.resolve(
+      process.cwd(),
+      localConfig.parentPackage.localRepoPath
+    );
     console.log(parentPackageDir);
 
     localConfig.parentPackage.git = simpleGit({
       baseDir: parentPackageDir,
     });
-    const currentParentPackageBranch = (await localConfig.parentPackage.git.branch()).current;
-    const branchLockItem = localConfig.branchLock.find((item) => item[localConfig.parentPackage.name].trim() === currentParentPackageBranch);
-    if (!branchLockItem) {
-      console.log(chalk.cyan(`Stopping as no branch lock entry exists for branch ${currentParentPackageBranch} in ${localConfig.parentPackage.name}.`));
-      return;
+    // const currentParentPackageBranch = (
+    //   await localConfig.parentPackage.git.branch()
+    // ).current;
+    // const branchLockItem = localConfig.branchLock.find((item) => item[localConfig.parentPackage.name].trim() === currentParentPackageBranch);
+
+    const branchLockItem = await lib.currentBranchLockItem(
+      localConfig.parentPackage,
+      localConfig.branchLock
+    );
+
+    const displayBranchLockItem = Object.assign({}, branchLockItem);
+    for (const key in displayBranchLockItem) {
+      if (
+        !dependentPackagesFiltered.find((item) =>
+          item.localRepoPath.endsWith(key)
+        ) &&
+        !localConfig.parentPackage.localRepoPath.endsWith(key)
+      ) {
+        delete displayBranchLockItem[key];
+      }
     }
-    console.log(chalk.white('[ -----------------------Branch lock----------------------- ]'));
-    console.log(chalk.white('The following is a breakdown of which branches will be updated in the listed repos.'));
-    console.log(chalk.white(JSON.stringify(branchLockItem, null, 2)));
+    console.log(
+      chalk.white(
+        '[ -----------------------Branch lock----------------------- ]'
+      )
+    );
+    console.log(
+      chalk.white(
+        'The following is a breakdown of which branches will be updated in the listed repos.'
+      )
+    );
+    console.log(chalk.white(JSON.stringify(displayBranchLockItem, null, 2)));
+    console.log(
+      chalk.white(
+        '[ -----------------------Preliminary checks started----------------------- ]'
+      )
+    );
 
-    console.log(chalk.white('[ -----------------------Preliminary checks started----------------------- ]'));
-
-    await lib.initialiseRepo(localConfig.parentPackage, branchLockItem, localConfig.parentPackage);
+    await lib.initialiseRepo(
+      localConfig.parentPackage,
+      branchLockItem,
+      localConfig.parentPackage
+    );
     const dependentPackages = [];
 
-    const dependentPackagesFiltered = localConfig.localDependencies.filter((dependentPackage) => !dependentPackage.skip);
     for (let dependentPackage of dependentPackagesFiltered) {
       dependentPackage = lib.parsePackageConfig(dependentPackage);
-      await lib.initialiseRepo(dependentPackage, branchLockItem, localConfig.parentPackage);
+      await lib.initialiseRepo(
+        dependentPackage,
+        branchLockItem,
+        localConfig.parentPackage
+      );
       dependentPackages.push(dependentPackage);
     }
 
-    console.log(chalk.white('[ -----------------------Preliminary checks completed----------------------- ]'));
+    console.log(
+      chalk.white(
+        '[ -----------------------Preliminary checks completed----------------------- ]'
+      )
+    );
 
     for (const dependentPackage of dependentPackages) {
       try {
         const status = await dependentPackage.git.status();
         dependentPackage.hasChangesToCommit = status.files.length > 0;
 
-        if (dependentPackage.hasChangesToCommit && !dependentPackage.commitMessage && dependentPackage.amendLatestCommit !== 'no-edit') {
-          console.log(chalk[dependentPackage.logColour](`[${dependentPackage.name}] Skipping as there are changes to commit, but no commit message was provided.`));
+        if (
+          dependentPackage.hasChangesToCommit &&
+          !dependentPackage.commitMessage &&
+          dependentPackage.amendLatestCommit !== 'no-edit'
+        ) {
+          console.log(
+            chalk[dependentPackage.logColour](
+              `[${dependentPackage.name}] Skipping as there are changes to commit, but no commit message was provided.`
+            )
+          );
           continue;
         } else {
           await lib.commitPackage(dependentPackage);
@@ -53,15 +107,28 @@ module.exports = async function (localConfig) {
         if (dependentPackage.push) {
           await lib.pushPackage(dependentPackage);
         } else if (dependentPackage.hasChangesToCommit) {
-          console.log(chalk[dependentPackage.logColour](`[${dependentPackage.name}] code committed but not pushed.`));
+          console.log(
+            chalk[dependentPackage.logColour](
+              `[${dependentPackage.name}] code committed but not pushed.`
+            )
+          );
         }
 
         const result = dependentPackage;
         result.commitSHA = await lib.latestCommitHash(dependentPackage);
-        result.latestCommitMessage = (await lib.latestCommit(dependentPackage)).message;
+        result.latestCommitMessage = (
+          await lib.latestCommit(dependentPackage)
+        ).message;
 
-        if (localConfig.parentPackage.updatePackageFile || localConfig.parentPackage.push) {
-          lib.updateDependencyVersion(dependentPackage, await lib.latestCommitHash(dependentPackage), localConfig.parentPackage);
+        if (
+          localConfig.parentPackage.updatePackageFile ||
+          localConfig.parentPackage.push
+        ) {
+          lib.updateDependencyVersion(
+            dependentPackage,
+            await lib.latestCommitHash(dependentPackage),
+            localConfig.parentPackage
+          );
           result.parentPackageUpdated = true;
         }
         result.gitState = lib.gitState(dependentPackage);

@@ -219,7 +219,6 @@ module.exports = {
       );
       return;
     }
-    console.log(branchLockItem);
     return branchLockItem;
   },
 

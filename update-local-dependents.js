@@ -14,21 +14,13 @@ module.exports = async function (localConfig) {
     const dependentPackagesFiltered = localConfig.localDependencies.filter(
       (dependentPackage) => !dependentPackage.skip
     );
-    console.log(dependentPackagesFiltered);
     const parentPackageDir = path.resolve(
       process.cwd(),
       localConfig.parentPackage.localRepoPath
     );
-    console.log(parentPackageDir);
-
     localConfig.parentPackage.git = simpleGit({
       baseDir: parentPackageDir,
     });
-    // const currentParentPackageBranch = (
-    //   await localConfig.parentPackage.git.branch()
-    // ).current;
-    // const branchLockItem = localConfig.branchLock.find((item) => item[localConfig.parentPackage.name].trim() === currentParentPackageBranch);
-
     const branchLockItem = await lib.currentBranchLockItem(
       localConfig.parentPackage,
       localConfig.branchLock

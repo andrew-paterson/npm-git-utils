@@ -65,8 +65,16 @@ module.exports = async function (localConfig) {
         '[ -----------------------Preliminary checks completed----------------------- ]'
       )
     );
+    if (localConfig.dependentPackage.commit) {
+      await lib.commitPackage(localConfig.dependentPackage);
+    } else {
+      console.log(
+        chalk[localConfig.dependentPackage.logColour](
+          `[${localConfig.dependentPackage.name}] code not committed.`
+        )
+      );
+    }
 
-    await lib.commitPackage(localConfig.dependentPackage);
     await lib.pushPackage(localConfig.dependentPackage);
     for (const consumingPackage of consumingPackages) {
       try {
@@ -89,8 +97,14 @@ module.exports = async function (localConfig) {
         }
         if (consumingPackage.commit) {
           await lib.commitPackage(consumingPackage);
+        } else {
+          console.log(
+            chalk[consumingPackage.logColour](
+              `[${consumingPackage.name}] code not committed.`
+            )
+          );
         }
-        if (consumingPackage.commit && consumingPackage.push) {
+        if (consumingPackage.push) {
           await lib.pushPackage(consumingPackage);
         } else if (consumingPackage.commit) {
           console.log(
@@ -99,7 +113,7 @@ module.exports = async function (localConfig) {
             )
           );
         }
-        if (consumingPackage.tag && consumingPackage.commit) {
+        if (consumingPackage.tag) {
           await lib.tagLatestCommit(consumingPackage);
         }
 

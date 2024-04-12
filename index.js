@@ -34,7 +34,23 @@ module.exports = {
       baseDir: packageConfig.localRepoPath,
     });
     packageConfig.logColour = packageConfig.logColour || 'cyan';
-    packageConfig.commit = packageConfig.push ? true : packageConfig.commit;
+    if (!packageConfig.commit && packageConfig.push) {
+      console.log(
+        chalk[packageConfig.logColour](
+          `[${packageConfig.name}] Overriding "push" from true to false, as "commit" is set to false.`
+        )
+      );
+      packageConfig.push = false;
+    }
+
+    if (!packageConfig.commit && packageConfig.tag) {
+      console.log(
+        chalk[packageConfig.logColour](
+          `[${packageConfig.name}] Overriding "tag" from true to false, as "commit" is set to false.`
+        )
+      );
+      packageConfig.tag = false;
+    }
     return packageConfig;
   },
 
@@ -389,6 +405,11 @@ module.exports = {
     const status = await packageConfig.git.status();
     const hasChangesToCommit = status.files.length > 0;
     if (!hasChangesToCommit) {
+      console.log(
+        chalk[packageConfig.logColour](
+          `[${packageConfig.name}] Not updating version in package.json as ther repo has no chnages to commit.`
+        )
+      );
       return;
     }
     const currentVersion = packageFile.version;
@@ -415,6 +436,7 @@ module.exports = {
           }
         })
         .join('.');
+      console.log(packageFile.version);
       packageFile.version = newVersion;
     }
     fs.writeFileSync(

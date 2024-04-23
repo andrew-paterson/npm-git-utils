@@ -3,6 +3,9 @@ const path = require('path');
 const fs = require('fs');
 const simpleGit = require('simple-git');
 const moment = require('moment');
+const getGitInfo = require('git-repo-info');
+const gitState = require('git-state');
+const nodeSundries = require('node-sundries');
 
 module.exports = {
   gitState(options) {
@@ -496,5 +499,261 @@ module.exports = {
       }
     });
     return uniqueDeps;
+  },
+
+  checkDep(dep, ENV) {
+    const pnpmDep = this.findPnpmDep(dep.name, './');
+    const final = {
+      version: this.specifiedMatchesInstalledDep(pnpmDep),
+    };
+
+    if (dep.children) {
+      final.children = this.processChildPackages(pnpmDep, dep.children);
+    }
+    ENV.dependencySummary[pnpmDep.name] = final;
+  },
+
+  findPnpmDep(depName, filePath) {
+    return this.allPnpmDeps(filePath).find(
+      (pnpmDep) => pnpmDep.name === depName
+    );
+  },
+  specifiedMatchesInstalledDep(item) {
+    if (!item) {
+      return;
+    }
+    if (item.linked) {
+      return `Linked locally to ${item.absolutePath} ${item.gitState}`;
+    }
+    const specified = this.extractVersion(item.pnpmLock.specifier);
+    const installed = this.extractVersion(item.pnpmLock.version);
+    return this.expectedVsFoundOutput(specified, installed);
+  },
+
+  allPnpmDeps(filePath, depTypes = ['dependencies', 'devDependencies']) {
+    const json = this.pnpmLockAsJson(filePath);
+    const packageFile = require(path.resolve(
+      process.cwd(),
+      filePath,
+      'package.json'
+    ));
+    return depTypes.reduce((acc, depType) => {
+      const obj = json[depType];
+      for (const key in obj) {
+        const final = {};
+        final.pnpmLock = obj[key];
+        final.name = key;
+        final.packageJson =
+          (packageFile.devDependencies || {})[key] ||
+          (packageFile.dependencies || {})[key];
+        if (final.pnpmLock.version.startsWith('link:')) {
+          final.linked = true;
+          const absolutePath = path.resolve(
+            process.cwd(),
+            filePath,
+            final.pnpmLock.version.replace('link:', '')
+          );
+          final.absolutePath = absolutePath;
+          final.gitState = this.checkGitState(absolutePath);
+        }
+        acc.push(final);
+      }
+      return acc;
+    }, []);
+  },
+
+  extractVersion(string) {
+    if (this.extractHash(string)) {
+      return this.extractHash(string);
+    }
+    if (this.extractSemverString(string)) {
+      return this.extractSemverString(string);
+    }
+    return false;
+  },
+
+  expectedVsFoundOutput(specified, installed) {
+    if (
+      this.extractSemverNumbers(specified) &&
+      this.extractSemverNumbers(specified) ===
+        this.extractSemverNumbers(installed)
+    ) {
+      return this.extractSemverNumbers(installed);
+    }
+    if (specified === installed) {
+      return installed;
+    }
+
+    return {
+      specified: specified,
+      installed: this.extractSemverNumbers(installed) || installed,
+    };
+  },
+
+  extractHash(string) {
+    const hashRegex = /[0-9a-f]{40}/;
+    if (!string.match(hashRegex)) {
+      return false;
+    }
+    return string.match(hashRegex)[0];
+  },
+
+  extractSemverNumbers(string) {
+    const versionRegex = /.{0,1}([0-9]+\.[0-9]+\.[0-9]+)/;
+    if (!string.match(versionRegex)) {
+      return false;
+    }
+    return string.match(versionRegex)[1];
+  },
+
+  extractSemverString(string) {
+    const versionRegex = /.{0,1}[0-9]+\.[0-9]+\.[0-9]+/;
+    if (!string.match(versionRegex)) {
+      return false;
+    }
+    return string.match(versionRegex)[0];
+  },
+
+  processChildPackages(parent, children) {
+    const parentName = typeof parent === 'string' ? parent : parent.name;
+    const final = {};
+    if ((parent || {}).linked) {
+      children.forEach((child) => {
+        const keyName = typeof child === 'string' ? child : child.name;
+        final[keyName] = this.processChildOfLinkedPackage(parent, child);
+      });
+    } else {
+      children.forEach((child) => {
+        const keyName = typeof child === 'string' ? child : child.name;
+        final[keyName] = this.processChildPackage(parentName, child, './');
+      });
+    }
+    return final;
+  },
+
+  processChildOfLinkedPackage(pnpmDep, child) {
+    const childDepName = typeof child === 'string' ? child : child.name;
+    const childPnpmDep = this.findPnpmDep(childDepName, pnpmDep.absolutePath);
+    childPnpmDep.via = pnpmDep.absolutePath;
+    return typeof child === 'string'
+      ? this.specifiedMatchesInstalledDep(childPnpmDep)
+      : {
+          version: this.specifiedMatchesInstalledDep(childPnpmDep),
+          children: this.processChildPackages(childPnpmDep, child.children),
+        };
+  },
+
+  processChildPackage(parentDep, childPackage, filePath) {
+    const childDepName =
+      typeof childPackage === 'string' ? childPackage : childPackage.name;
+    const json = this.pnpmLockAsJson(filePath);
+    let parentPackage;
+    const final = {};
+    for (const key in json.packages) {
+      if (key.indexOf(parentDep) > -1) {
+        parentPackage = json.packages[key];
+      }
+    }
+    for (const key in parentPackage.dependencies) {
+      if (childDepName === key) {
+        final.expected = this.extractVersion(parentPackage.dependencies[key]);
+      }
+    }
+    let package;
+    for (const key in json.packages) {
+      // Check if any of the items in the childPackages array are in the array produced by splitting the key on '/' and '@' in the key
+      const keyArray = key.split(/\/|@/);
+      if (keyArray.indexOf(childDepName) > -1) {
+        package = json.packages[key];
+        final.found =
+          package.resolution.commit || package.resolution.tarball
+            ? this.extractHash(
+                package.resolution.commit || package.resolution.tarball
+              )
+            : this.extractSemverString(key);
+      }
+    }
+    return typeof childPackage === 'string'
+      ? this.expectedVsFoundOutput(final.expected, final.found)
+      : {
+          version: this.expectedVsFoundOutput(final.expected, final.found),
+          children: this.processChildPackages(
+            childDepName,
+            childPackage.children
+          ),
+        };
+  },
+
+  pnpmLockAsJson(filePath) {
+    const json = nodeSundries.yamlFileToJs(`${filePath}/pnpm-lock.yaml`);
+    return Array.isArray(json) ? json[0] : json;
+  },
+
+  getLocalLinks(linkPath, acc = [], parent) {
+    const locallyLinked = this.allPnpmDeps(linkPath).filter(
+      (dep) => dep.linked
+    );
+    if (!locallyLinked.length) {
+      return acc;
+    }
+    if (parent) {
+      parent.children = locallyLinked;
+    } else {
+      acc = locallyLinked;
+    }
+    return locallyLinked.reduce((acc, link) => {
+      return this.getLocalLinks(link.absolutePath, acc, link);
+    }, acc);
+  },
+
+  filterProperties(array, properties) {
+    return array.map((item) => {
+      const filteredItem = {};
+      properties.forEach((prop) => {
+        if (item[prop] !== undefined) {
+          filteredItem[prop] = Array.isArray(item[prop])
+            ? this.filterProperties(item[prop], properties)
+            : item[prop];
+        }
+      });
+      return filteredItem;
+    });
+  },
+
+  checkLocalDevRepos(localDevRepos) {
+    if (!localDevRepos) {
+      return;
+    }
+    console.log(chalk.magenta(`LOCAL DEV REPO STATUS\n`));
+    const output = {};
+    localDevRepos.forEach((repo) => {
+      const depName = path.basename(repo.path);
+      output[depName] = {};
+      let repoState;
+      if (gitState.isGitSync(repo.path)) {
+        repoState = gitState.checkSync(repo.path);
+        const gitInfo = getGitInfo(repo.path);
+        const gitStatus = {};
+        for (const key in repoState) {
+          if (repoState[key] > 0) {
+            gitStatus[key] = repoState[key];
+          }
+        }
+        output[depName] = gitStatus || {};
+        output[depName].currentBranch = gitInfo.branch;
+        output[
+          depName
+        ].lastCommit = `${gitInfo.sha} "${gitInfo.commitMessage}"`;
+      }
+    });
+    console.log(output);
+  },
+
+  checkGitState(path) {
+    if (!gitState.isGitSync(path)) {
+      return '';
+    }
+    const repoState = gitState.checkSync(path);
+    return `${repoState.dirty} dirty and ${repoState.untracked} untracked.`;
   },
 };

@@ -228,15 +228,11 @@ module.exports = {
     const currentDependentBranch = (await referencePackage.git.branch())
       .current;
     const branchLockItem = branchLockArray.find(
-      (item) => item[referencePackage.name].trim() === currentDependentBranch
+      (item) =>
+        (item[referencePackage.name] || '').trim() === currentDependentBranch
     );
     if (!branchLockItem) {
-      console.log(
-        chalk.yellow(
-          `No branch lock entry exists for branch ${currentDependentBranch} in ${referencePackage.name}.`
-        )
-      );
-      return;
+      throw `No branch lock entry exists for branch with ${referencePackage.name} === ${currentDependentBranch}.`;
     }
     return branchLockItem;
   },

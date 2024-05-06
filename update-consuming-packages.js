@@ -14,6 +14,10 @@ module.exports = async function (localConfig) {
       localConfig.dependentPackage,
       localConfig.branchLock
     );
+
+    if (!branchLockItem) {
+      return;
+    }
     const displayBranchLockItem = Object.assign({}, branchLockItem);
     for (const key in displayBranchLockItem) {
       if (

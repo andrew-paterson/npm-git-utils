@@ -37,23 +37,14 @@ module.exports = async function (localConfig) {
         delete displayBranchLockItem[key];
       }
     }
-    console.log(
-      chalk.white(
-        '[ -----------------------Branch lock----------------------- ]'
-      )
-    );
+    lib.logHeader('BRANCH LOCK SUMMARY');
     console.log(
       chalk.white(
         'The following is a breakdown of which branches will be updated in the listed repos.'
       )
     );
-    console.log(chalk.white(JSON.stringify(displayBranchLockItem, null, 2)));
-    console.log(
-      chalk.white(
-        '[ -----------------------Preliminary checks started----------------------- ]'
-      )
-    );
-
+    console.log(chalk.yellow(JSON.stringify(displayBranchLockItem, null, 2)));
+    lib.logHeader('PRELIMINARY CHECKS STARTED');
     await lib.initialiseRepo(
       localConfig.parentPackage,
       branchLockItem,
@@ -70,12 +61,7 @@ module.exports = async function (localConfig) {
       );
       dependentPackages.push(dependentPackage);
     }
-
-    console.log(
-      chalk.white(
-        '[ -----------------------Preliminary checks completed----------------------- ]'
-      )
-    );
+    lib.logHeader('PRELIMINARY CHECKS COMPLETED, UPDATING CONSUMING PACKAGES');
 
     for (const dependentPackage of dependentPackages) {
       try {

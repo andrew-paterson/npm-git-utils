@@ -28,6 +28,7 @@ module.exports = {
   },
 
   parsePackageConfig(packageConfig) {
+    packageConfig.actionsLog = packageConfig.actionsLog || [];
     packageConfig.localRepoPath = path.resolve(
       process.cwd(),
       packageConfig.localRepoPath
@@ -53,6 +54,10 @@ module.exports = {
         )
       );
       packageConfig.tag = false;
+    }
+    if (packageConfig.tag && packageConfig.pushTags === undefined) {
+      `[${packageConfig.name}] Applying default of true to "pushTags", because "tag" is true and "pushTags" is not set.`;
+      packageConfig.pushTags = true;
     }
     return packageConfig;
   },
@@ -102,6 +107,7 @@ module.exports = {
           )
         );
       } else {
+        packageConfig.actionsLog.push('Committing succeeded');
         console.log(
           chalk[packageConfig.logColour](
             `[${packageConfig.name}] Add commit ${newSha} in branch ${
@@ -111,6 +117,7 @@ module.exports = {
         );
       }
     } else {
+      packageConfig.actionsLog.push('Committing skipped');
       console.log(
         chalk[packageConfig.logColour](
           `[${
@@ -123,8 +130,14 @@ module.exports = {
     }
   },
 
+  logHeader(string, logColour = 'white') {
+    const separatorLine = '-'.repeat(string.length);
+    console.log(
+      chalk[logColour](`${separatorLine}\n${string}\n${separatorLine}`)
+    );
+  },
+
   logResults: async function (results, skipped) {
-    console.log('RESULT');
     console.log(
       results.map((result) => {
         return {
@@ -134,6 +147,9 @@ module.exports = {
         };
       })
     );
+    if (!skipped) {
+      return;
+    }
     console.log('SKIPPED');
     const dependentPackagesSkippedGit = [];
     for (const item of skipped) {
@@ -210,18 +226,23 @@ module.exports = {
     if (packageConfig.amendLatestCommit) {
       pushOptions.push('-f');
     }
-    const parentPackagePush = await packageConfig.git.push(pushOptions);
-    const pushMessage =
-      pushOptions.indexOf('-f') > -1 ? 'Force pushed code' : 'Pushed code';
-    const parentPackagePushMessage = (parentPackagePush.pushed[0] || {})
-      .alreadyUpdated
-      ? 'Already pushed'
-      : pushMessage;
-    console.log(
-      chalk[packageConfig.logColour](
-        `[${packageConfig.name}] ${parentPackagePushMessage}`
-      )
-    );
+    try {
+      const parentPackagePush = await packageConfig.git.push(pushOptions);
+      const pushMessage =
+        pushOptions.indexOf('-f') > -1 ? 'Force pushed code' : 'Pushed code';
+      const parentPackagePushMessage = (parentPackagePush.pushed[0] || {})
+        .alreadyUpdated
+        ? 'Already pushed'
+        : pushMessage;
+      packageConfig.actionsLog.push('Pushing succeeded');
+      console.log(
+        chalk[packageConfig.logColour](
+          `[${packageConfig.name}] ${parentPackagePushMessage}`
+        )
+      );
+    } catch (err) {
+      packageConfig.actionsLog.push('Pushing failed');
+    }
   },
 
   currentBranchLockItem: async function (referencePackage, branchLockArray) {
@@ -371,13 +392,19 @@ module.exports = {
       ? ['-a', newTag, '-m', packageConfig.tagMessage]
       : [newTag];
     if (!(await this.tagExists(packageConfig, newTag))) {
-      await packageConfig.git.tag(tagArgs);
-      console.log(
-        chalk[packageConfig.logColour](
-          `[${packageConfig.name}] Added tag ${newTag} to latest commit.`
-        )
-      );
+      try {
+        await packageConfig.git.tag(tagArgs);
+        packageConfig.actionsLog.push('Tagging succeeded');
+        console.log(
+          chalk[packageConfig.logColour](
+            `[${packageConfig.name}] Added tag ${newTag} to latest commit.`
+          )
+        );
+      } catch (err) {
+        packageConfig.actionsLog.push('Tagging failed');
+      }
     } else {
+      packageConfig.actionsLog.push('Tagging skipped');
       console.log(
         chalk[packageConfig.logColour](
           `[${packageConfig.name}] Tag ${newTag} already exists.`
@@ -385,10 +412,15 @@ module.exports = {
       );
     }
     if (packageConfig.pushTags !== false) {
-      await packageConfig.git.push(['--tags']);
-      console.log(
-        chalk[packageConfig.logColour](`[${packageConfig.name}] Pushed tags.`)
-      );
+      try {
+        await packageConfig.git.push(['--tags']);
+        packageConfig.actionsLog.push('Pushing tags succeeded');
+        console.log(
+          chalk[packageConfig.logColour](`[${packageConfig.name}] Pushed tags.`)
+        );
+      } catch (err) {
+        packageConfig.actionsLog.push('Pushing tags failed');
+      }
     }
     return newTag;
   },

@@ -5,3 +5,7 @@
 # Update local dependents
 
 [Docs here](/docs/update-local-dependents.md)
+
+# TODO
+
+If not pushing a repo, don't worry about `Error: fatal: couldn't find remote ref feature/websockets`

@@ -33,7 +33,8 @@ module.exports = {
       process.cwd(),
       packageConfig.localRepoPath
     );
-    packageConfig.name = path.basename(packageConfig.localRepoPath);
+    packageConfig.name =
+      packageConfig.name || path.basename(packageConfig.localRepoPath);
     packageConfig.git = simpleGit({
       baseDir: packageConfig.localRepoPath,
     });

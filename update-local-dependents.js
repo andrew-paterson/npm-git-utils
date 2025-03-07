@@ -93,18 +93,29 @@ module.exports = async function (localConfig) {
         }
 
         const result = dependentPackage;
+
         result.commitSHA = await lib.latestCommitHash(dependentPackage);
         result.latestCommitMessage = (
           await lib.latestCommit(dependentPackage)
         ).message;
-
+        let updatedDependencyVersion;
+        if (dependentPackage.updatedDependencyVersionFunc) {
+          updatedDependencyVersion =
+            await dependentPackage.updatedDependencyVersionFunc(
+              dependentPackage
+            );
+        } else {
+          updatedDependencyVersion = await lib.latestCommitHash(
+            dependentPackage
+          );
+        }
         if (
           localConfig.parentPackage.updatePackageFile ||
           localConfig.parentPackage.push
         ) {
           lib.updateDependencyVersion(
             dependentPackage,
-            await lib.latestCommitHash(dependentPackage),
+            updatedDependencyVersion,
             localConfig.parentPackage
           );
           result.parentPackageUpdated = true;

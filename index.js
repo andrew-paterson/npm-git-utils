@@ -272,6 +272,11 @@ module.exports = {
     if (!branch) {
       throw 'Error';
     }
+    try {
+      packageConfig.repoOwner = await this.getRepoOwner(packageConfig);
+    } catch (err) {
+      console.log(chalk.red(err));
+    }
     await packageConfig.git.fetch('origin', branch);
     const remoteCommits = (
       await packageConfig.git.raw('rev-list', `origin/${branch}`)
@@ -784,5 +789,28 @@ module.exports = {
     }
     const repoState = gitState.checkSync(path);
     return `${repoState.dirty} dirty and ${repoState.untracked} untracked.`;
+  },
+
+  getRepoOwner: async (packageConfig) => {
+    try {
+      const remotes = await packageConfig.git.getRemotes(true);
+      const originRemote = remotes.find((remote) => remote.name === 'origin');
+
+      if (originRemote) {
+        const url = originRemote.refs.fetch;
+        const match = url.match(/github\.com[:/](.+?)\/(.+?)(\.git)?$/);
+
+        if (match) {
+          const owner = match[1];
+          return owner;
+        } else {
+          throw 'Could not parse repository owner from URL.';
+        }
+      } else {
+        throw 'No origin remote found.';
+      }
+    } catch (error) {
+      throw ('Error getting repository owner:', error);
+    }
   },
 };

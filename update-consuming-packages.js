@@ -68,9 +68,17 @@ module.exports = async function (localConfig) {
     for (const consumingPackage of consumingPackages) {
       try {
         const result = consumingPackage;
-        const dependentPackageVersion = await lib.latestCommitHash(
-          localConfig.dependentPackage
-        );
+        let dependentPackageVersion;
+        if (localConfig.dependentPackage.dependentPackageVersionFunc) {
+          dependentPackageVersion =
+            await localConfig.dependentPackage.dependentPackageVersionFunc(
+              localConfig.dependentPackage
+            );
+        } else {
+          dependentPackageVersion = await lib.latestCommitHash(
+            localConfig.dependentPackage
+          );
+        }
         lib.updateDependencyVersion(
           localConfig.dependentPackage,
           dependentPackageVersion,
@@ -105,9 +113,9 @@ module.exports = async function (localConfig) {
         if (consumingPackage.tag) {
           await lib.tagLatestCommit(consumingPackage);
         }
-
         result.latestTag = await lib.latestTag(consumingPackage);
         result.dependencySHA = dependentPackageVersion;
+
         result.commitSHA = await lib.latestCommitHash(consumingPackage);
         result.latestCommitMessage = (
           await lib.latestCommit(consumingPackage)

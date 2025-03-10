@@ -3,12 +3,12 @@ const util = require('util');
 const lib = require('./index');
 const fs = require('fs');
 
-module.exports = function (ENV, localDevRepos, linkTree) {
+module.exports = function (linkTree) {
   try {
-    ENV.dependencySummary = {};
+    const dependencySummary = {};
     if (linkTree) {
       linkTree.forEach((dep) => {
-        lib.checkDep(dep, ENV);
+        lib.checkDep(dep, dependencySummary);
       });
 
       console.log(
@@ -17,7 +17,7 @@ module.exports = function (ENV, localDevRepos, linkTree) {
         )}\n`
       );
       console.log(
-        util.inspect(ENV.dependencySummary, {
+        util.inspect(dependencySummary, {
           showHidden: false,
           depth: null,
           colors: true,

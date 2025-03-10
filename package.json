@@ -12,14 +12,16 @@
   },
   "author": "",
   "license": "ISC",
-  "devDependencies": {
-    "chalk": "^4.1.2",
-    "eslint": "^8.11.0",
+  "peerDependencies": {
+    "chalk": "^2.4.2",
     "git-repo-info": "^2.1.1",
     "git-state": "^4.1.0",
     "moment": "^2.29.4",
     "node-sundries": "0.0.8",
-    "simple-git": "^3.19.1",
+    "simple-git": "^3.19.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.11.0",
     "tag-and-release": "^1.0.17"
   },
   "engines": {

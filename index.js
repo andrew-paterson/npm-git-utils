@@ -3,7 +3,6 @@ const path = require('path');
 const fs = require('fs');
 const simpleGit = require('simple-git');
 const moment = require('moment');
-const getGitInfo = require('git-repo-info');
 const gitState = require('git-state');
 const nodeSundries = require('node-sundries');
 
@@ -535,16 +534,15 @@ module.exports = {
     return uniqueDeps;
   },
 
-  checkDep(dep, ENV) {
-    const pnpmDep = this.findPnpmDep(dep.name, './');
+  checkDep(dep, acc) {
+    const pnpmDep = this.findPnpmDep(dep.name, dep.path);
     const final = {
       version: this.specifiedMatchesInstalledDep(pnpmDep),
     };
-
     if (dep.children) {
       final.children = this.processChildPackages(pnpmDep, dep.children);
     }
-    ENV.dependencySummary[pnpmDep.name] = final;
+    acc[pnpmDep.name] = final;
   },
 
   findPnpmDep(depName, filePath) {
@@ -564,15 +562,35 @@ module.exports = {
     return this.expectedVsFoundOutput(specified, installed);
   },
 
+  isMonoRepoWorkspace(filePath) {
+    const dirName = path.basename(filePath);
+    const dirPath = path.dirname(filePath);
+    if (!fs.existsSync(path.resolve(dirPath, 'pnpm-workspace.yaml'))) {
+      return false;
+    }
+    const workspaceJson = nodeSundries.yamlFileToJs(
+      path.resolve(dirPath, 'pnpm-workspace.yaml')
+    );
+    return (
+      workspaceJson.packages.includes(`./${dirName}`) ||
+      workspaceJson.packages.includes(dirName)
+    );
+  },
+
   allPnpmDeps(filePath, depTypes = ['dependencies', 'devDependencies']) {
-    const json = this.pnpmLockAsJson(filePath);
+    const pnpmLockLocation = this.isMonoRepoWorkspace(filePath)
+      ? path.dirname(filePath)
+      : filePath;
+    const pnpmLockJson = this.pnpmLockAsJson(pnpmLockLocation);
     const packageFile = require(path.resolve(
       process.cwd(),
       filePath,
       'package.json'
     ));
     return depTypes.reduce((acc, depType) => {
-      const obj = json[depType];
+      const obj = this.isMonoRepoWorkspace(filePath)
+        ? pnpmLockJson.importers[path.basename(filePath)][depType]
+        : pnpmLockJson[depType];
       for (const key in obj) {
         const final = {};
         final.pnpmLock = obj[key];
@@ -588,7 +606,10 @@ module.exports = {
             final.pnpmLock.version.replace('link:', '')
           );
           final.absolutePath = absolutePath;
-          final.gitState = this.checkGitState(absolutePath);
+          final.gitState = this.checkGitState(
+            absolutePath,
+            this.isMonoRepoWorkspace(filePath)
+          );
         }
         acc.push(final);
       }
@@ -754,40 +775,15 @@ module.exports = {
     });
   },
 
-  checkLocalDevRepos(localDevRepos) {
-    if (!localDevRepos) {
-      return;
-    }
-    console.log(chalk.magenta(`LOCAL DEV REPO STATUS\n`));
-    const output = {};
-    localDevRepos.forEach((repo) => {
-      const depName = path.basename(repo.path);
-      output[depName] = {};
-      let repoState;
-      if (gitState.isGitSync(repo.path)) {
-        repoState = gitState.checkSync(repo.path);
-        const gitInfo = getGitInfo(repo.path);
-        const gitStatus = {};
-        for (const key in repoState) {
-          if (repoState[key] > 0) {
-            gitStatus[key] = repoState[key];
-          }
-        }
-        output[depName] = gitStatus || {};
-        output[depName].currentBranch = gitInfo.branch;
-        output[
-          depName
-        ].lastCommit = `${gitInfo.sha} "${gitInfo.commitMessage}"`;
+  checkGitState(dirPath, isMonoRepoWorkspace) {
+    if (!gitState.isGitSync(dirPath)) {
+      if (!isMonoRepoWorkspace) {
+        return 'Not a git repository';
+      } else {
+        return this.checkGitState(path.dirname(dirPath));
       }
-    });
-    console.log(output);
-  },
-
-  checkGitState(path) {
-    if (!gitState.isGitSync(path)) {
-      return '';
     }
-    const repoState = gitState.checkSync(path);
+    const repoState = gitState.checkSync(dirPath);
     return `${repoState.dirty} dirty and ${repoState.untracked} untracked.`;
   },
 

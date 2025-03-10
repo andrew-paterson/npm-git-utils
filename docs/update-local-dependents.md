@@ -4,7 +4,7 @@ Updates the commit SHA of each updated dependency in the package.json file in th
 
 Optionally commits and pushed the consuming NPM project.
 
-```
+```javascript
 const updateLocalDependencies = require('npm-git-utils/update-local-dependents');
 const options = = {
   parentPackage: {
@@ -23,6 +23,9 @@ const options = = {
       commitMessage: 'Update consuming-npm-project', // Optional, but required if commit or push is true, unless the amendLatestCommit is set to 'no-edit'
       push: true, // Optional, default = false. If true, the repo will be pushed to origin. Forces the commit option to true if true.
       logColour: 'green', // Optional, default = 'cyan'. Colour of the console log messages relating to the NPM dependency.
+      dependentPackageVersionFunc(dependentPackage) {
+      return `***Commit SHA***`.
+    } // Optional. By default, after pushing the dependent package, the script will fetch the latest commit in the branch that has just been pushed, and update the version of the dependency to that SHA in the consuming package. If this function is passed, the result of this function will be used instead. An example of where this is useful is if you source code and build branches are different.
     },
     {
       localRepoPath: './npm-dependency-2',

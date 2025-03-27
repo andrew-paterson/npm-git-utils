@@ -99,9 +99,9 @@ module.exports = async function (localConfig) {
           await lib.latestCommit(dependentPackage)
         ).message;
         let updatedDependencyVersion;
-        if (dependentPackage.updatedDependencyVersionFunc) {
+        if (dependentPackage.updatedConsumingpackageVersionFunc) {
           updatedDependencyVersion =
-            await dependentPackage.updatedDependencyVersionFunc(
+            await dependentPackage.updatedConsumingpackageVersionFunc(
               dependentPackage
             );
         } else {

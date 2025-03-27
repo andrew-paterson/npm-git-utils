@@ -15,33 +15,31 @@ const options = {
     amendLatestCommit: null, // Optional, default = false. can be true or 'no-edit'. If present, the commit option is forced to true. If true, the latest commit will be amended with the changes, and the commmit message will be updated to the value of the commitMessage option. if 'no-edit', latest commit will be amended with the changes, and the commit message will not be changed.
     logColour: 'magenta', // Optional, default = 'cyan'. Colour of the console log messages relating to the NPM dependency.
     commit: true, // Optional, default = false Whether or not to commit any uncommitted changes. If false, the script will continue witht eh most recent commit.
-    dependentPackageVersionFunc(dependentPackage) {
+    customEditsFunc: async (
+        packageConfig,
+      ) => {}, // Optional. Must be an async function. If present, it will be the last function to run before the repo changes are committed. It will always run after any automated edits, such as version bumps.
+    updatedConsumingpackageVersionFunc(dependentPackage) {
       return `***Commit SHA***`.
     } // Optional. By default, after pushing the dependent package, the script will fetch the latest commit in the branch that has just been pushed, and update the version of the dependency to that SHA in the consumung package. If this function is passed, the result of this function will be used instead. An example of where this is useful is if you source code and build branches are different.
   }],
   consumingPackages: [
     {
       localRepoPath: './consuming-project-1', // Path to the git repo of the consuming package.
+      npmPackageSubDir: './apps/nested-npm-project', // Optional, default = null. Required if the NPM project which consumes the dependency is nested within the git repo. Speficies the path to the NPM project relative to the localRepoPath.
+      commitMessage: 'Amedmed latest commit',
       skip: true, // Optional, default = false. If true, the package will be skipped.
       commit: true, // Optional, default = false. If false, forces push to false as well.
       commitMessage: 'Update shared-dependency', // Optional, but required if commit or push is true, unless the amendLatestCommit is set to 'no-edit'
-      push: true, // Optional, default = false. If true, the repo will be pushed to origin.
+      amendLatestCommit: null, // Optional, default = false. can be true or 'no-edit'. Will be forced to false if the commit option is not true. If true, the latest commit will be amended with the changes, and the commmit message will be updated to the value of the commitMessage option. If 'no-edit', latest commit will be amended with the changes, and the commit message will not be changed.
+      push: true, // Optional, default = false. If true, the repo will be pushed to origin. If amendlatestCommit is truthy, push will happen with the force option.
       releaseType: 'minor', // Optional, default = 'patch', can be 'minor' or 'major' as well. Defines how the version is bumped in the consuming package.json file. Overridden by preReleaseType if both are present.
-      logColour: 'green', // Optional, default = 'cyan'. Colour of the console log messages relating to the NPM dependency.
-      customEditsFunc: async function updateDepsTest(
-        packageConfig,
-        dependentPackage,
-        dependentPackageVersion
-      ) {}, // Optional. Must be an async function, which runs after the consuming package's package.json file has been updates, but before the consuming package is committed.
-    },
-    {
-      localRepoPath: './consuming-project-2',
-      npmPackageSubDir: './apps/nested-npm-project', // Optional, default = null. Required if the NPM project which consumes the dependency is nested within the git repo. Speficies the path to the NPM project relative to the localRepoPath.
-      commitMessage: 'Amedmed latest commit',
-      amendLatestCommit: true, // Optional, default = false. can be true or 'no-edit'. If present, the commit option is forced to true. If true, the latest commit will be amended with the changes, and the commmit message will be updated to the value of the commitMessage option. if 'no-edit', latest commit will be amended with the changes, and the commit message will not be changed.
       preReleaseType: 'dev', // Opional, can be any string. If present, the version will be bumped in the consuming package.json file, by simply appending the string and datetime to the current version. If present, the releaseType option is ignored.
       tag: true, // Optional. If true, the commit will be tagged with the current version in package.json
       pushTags: false, // Optional, default = true. Whether to push the tags after tagging
+      logColour: 'green', // Optional, default = 'cyan'. Colour of the console log messages relating to the NPM dependency.
+       customEditsFunc: async (
+        packageConfig,
+      ) => {}, // Optional. Must be an async function. If present, it will be the last function to run before the repo changes are committed. It will always run after any automated edits, such as version bumps.
     },
     {
       localRepoPath: '.consuming-project-3',

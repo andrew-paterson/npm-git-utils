@@ -73,9 +73,9 @@ module.exports = async function (localConfig) {
         const result = consumingPackage;
 
         let dependentPackageVersion;
-        if (localConfig.dependentPackage.updatedDependencyVersionFunc) {
+        if (localConfig.dependentPackage.updatedConsumingpackageVersionFunc) {
           dependentPackageVersion =
-            await localConfig.dependentPackage.updatedDependencyVersionFunc(
+            await localConfig.dependentPackage.updatedConsumingpackageVersionFunc(
               localConfig.dependentPackage
             );
         } else {

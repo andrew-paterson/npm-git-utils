@@ -63,6 +63,15 @@ module.exports = {
   },
 
   commitPackage: async function (packageConfig) {
+    if (!packageConfig.commit && packageConfig.amendLatestCommit) {
+      console.log(
+        chalk[packageConfig.logColour](
+          `[${packageConfig.name}] Forcing the amendlatestCommit option from ${packageConfig.amendLatestCommit} to false, as commit is set to false.`
+        )
+      );
+      packageConfig.amendLatestCommit = false;
+      return;
+    }
     await packageConfig.git.add('.');
     console.log(
       chalk[packageConfig.logColour](
@@ -91,7 +100,7 @@ module.exports = {
           `[${
             packageConfig.name
           }] Amend latest commit with an updated commit message ${await this.latestCommitHash(
-            packageConfig.git
+            packageConfig
           )}`
         )
       );
@@ -260,12 +269,10 @@ module.exports = {
     branchLockArray
   ) {
     const branchesMap = {};
-    for (var packageSet of [consumingPackages, consumedPackages]) {
-      for (var packageConfig of packageSet) {
-        branchesMap[packageConfig.name] = (
-          await packageConfig.git.branch()
-        ).current;
-      }
+    for (var packageConfig of consumingPackages.concat(consumedPackages)) {
+      branchesMap[packageConfig.name] = (
+        await packageConfig.git.branch()
+      ).current;
     }
     const matchingBranchLockItem = branchLockArray.find((branchLockItem) => {
       return require('node:util').isDeepStrictEqual(
@@ -273,36 +280,18 @@ module.exports = {
         branchesMap
       );
     });
-
-    // const currentDependentBranch = (await referencePackage.git.branch())
-    //   .current;
-    // const branchLockItem = branchLockArray.find(
-    //   (item) =>
-    //     (item[referencePackage.name] || '').trim() === currentDependentBranch
-    // );
     if (!matchingBranchLockItem) {
-      throw `No branch lock entry exists for branch with ${JSON.stringify(
+      throw `No branch lock entry matches the currently checkout branches of the included repos, which are as follows:\n${JSON.stringify(
         branchesMap,
         null,
         2
-      )}.`;
+      )}`;
     }
     return matchingBranchLockItem;
   },
 
-  initialiseRepo: async function (
-    packageConfig,
-    branchLockItem,
-    referencePackageConfig
-  ) {
-    const branch = await this.branchLockPass(
-      packageConfig,
-      branchLockItem,
-      referencePackageConfig
-    );
-    if (!branch) {
-      throw 'Error';
-    }
+  initialiseRepo: async function (packageConfig, branchLockItem) {
+    const branch = branchLockItem[packageConfig.name];
     try {
       packageConfig.repoOwner = await this.getRepoOwner(packageConfig);
     } catch (err) {
@@ -468,6 +457,9 @@ module.exports = {
   },
 
   bumpVersion: async function (packageConfig) {
+    if (!(packageConfig.releaseType || packageConfig.preReleaseType)) {
+      return;
+    }
     const packageFilePath = this.packageFilePath(packageConfig);
     const packageFile = require(packageFilePath);
     const status = await packageConfig.git.status();
@@ -504,7 +496,6 @@ module.exports = {
           }
         })
         .join('.');
-      console.log(packageFile.version);
       packageFile.version = newVersion;
     }
     fs.writeFileSync(

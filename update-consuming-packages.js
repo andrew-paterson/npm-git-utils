@@ -1,7 +1,6 @@
 const chalk = require('chalk');
 const lib = require('./index');
 const results = [];
-let finalConsumedPackage;
 
 async function doBranchLock(
   consumingPackagesFiltered,
@@ -13,21 +12,19 @@ async function doBranchLock(
     consumedPackagesFiltered,
     branchLock
   );
-  console.log(branchLockItem);
   if (!branchLockItem) {
     return;
   }
   const displayBranchLockItem = Object.assign({}, branchLockItem);
-  // for (const key in displayBranchLockItem) {
-  //   if (
-  //     !consumingPackagesFiltered.find((item) =>
-  //       item.localRepoPath.endsWith(key)
-  //     ) &&
-  //     !consumedPackage.localRepoPath.endsWith(key)
-  //   ) {
-  //     delete displayBranchLockItem[key];
-  //   }
-  // }
+  for (const key in displayBranchLockItem) {
+    if (
+      !consumingPackagesFiltered
+        .concat(consumedPackagesFiltered)
+        .find((item) => item.localRepoPath.endsWith(key))
+    ) {
+      delete displayBranchLockItem[key];
+    }
+  }
   lib.logHeader('BRANCH LOCK SUMMARY');
   console.log(
     chalk.white(
@@ -35,127 +32,113 @@ async function doBranchLock(
     )
   );
   console.log(chalk.yellow(JSON.stringify(displayBranchLockItem, null, 2)));
-  return branchLockItem;
+  return displayBranchLockItem;
+}
+
+function filterAndParsePackages(localConfig) {
+  return ['consumingPackages', 'consumedPackages'].map((key) => {
+    return localConfig[key]
+      .filter((consumingPackage) => !consumingPackage.skip)
+      .map((item) => lib.parsePackageConfig(item));
+  });
+}
+
+async function initialiseRepos(packageConfigs, branchLockItem) {
+  lib.logHeader('PRELIMINARY CHECKS STARTED');
+
+  const promises = packageConfigs.map((packageConfig) => {
+    return lib.initialiseRepo(packageConfig, branchLockItem);
+  });
+  return await Promise.all(promises);
+}
+
+async function processPackages(type, opts) {
+  const packagesToProcess = opts[`${type}PackagesFiltered`];
+  const promises = packagesToProcess.map((consumedPackage) => {
+    return processPackage(consumedPackage, type, opts);
+  });
+  return await Promise.all(promises);
+}
+
+async function processPackage(package, type, opts) {
+  const result = package;
+  if (type === 'consuming') {
+    for (let consumedPackage of opts.consumedPackagesFiltered) {
+      lib.updateDependencyVersion(
+        consumedPackage,
+        consumedPackage.consumedSHA,
+        package
+      );
+      result.dependencySHAs = result.dependencySHAs || [];
+      result.dependencySHAs.push({
+        name: consumedPackage.name,
+        sha: consumedPackage.consumedSHA,
+      });
+    }
+  }
+  await lib.bumpVersion(package);
+  if (package.customEditsFunc) {
+    await package.customEditsFunc(package);
+  }
+  if (package.commit) {
+    await lib.commitPackage(package);
+  } else {
+    console.log(
+      chalk[package.logColour](`[${package.name}] code not committed.`)
+    );
+  }
+  if (package.push) {
+    await lib.pushPackage(package);
+  } else if (package.commit) {
+    console.log(
+      chalk[package.logColour](
+        `[${package.name}] code committed but not pushed.`
+      )
+    );
+  }
+  if (type === 'consumed') {
+    package.commitSHA = await lib.latestCommitHash(package);
+    if (package.updatedConsumingPackageVersionFunc) {
+      package.consumedSHA = await package.updatedConsumingPackageVersionFunc(
+        package
+      );
+    } else {
+      package.consumedSHA = package.commitSHA;
+    }
+  }
+  if (package.tag) {
+    await lib.tagLatestCommit(package);
+  }
+  result.latestTag = await lib.latestTag(package);
+  result.commitSHA = await lib.latestCommitHash(package);
+  result.latestCommitMessage = (await lib.latestCommit(package)).message;
+  result.gitState = lib.gitState(package);
+  results.push(result);
 }
 
 module.exports = async function (localConfig) {
-  const consumingPackagesFiltered = localConfig.consumingPackages
-    .filter((consumingPackage) => !consumingPackage.skip)
-    .map((item) => lib.parsePackageConfig(item));
-  const consumedPackagesFiltered = localConfig.consumedPackages
-    .filter((consumedPackage) => !consumedPackage.skip)
-    .map((item) => lib.parsePackageConfig(item));
-  const branchLockItem = await doBranchLock(
-    consumingPackagesFiltered,
-    consumedPackagesFiltered,
-    localConfig.branchLock
-  );
-  return;
-  for (let [index, consumedPackage] of localConfig.consumedPackages.entries()) {
-    if (index + 1 === localConfig.consumedPackages.length) {
-      finalConsumedPackage = true;
-    }
-    consumedPackage = lib.parsePackageConfig(consumedPackage);
-    try {
-      lib.logHeader('PRELIMINARY CHECKS STARTED');
-      await lib.initialiseRepo(
-        consumedPackage,
-        branchLockItem,
-        consumedPackage
-      );
-      const consumingPackages = [];
+  try {
+    const [consumingPackagesFiltered, consumedPackagesFiltered] =
+      filterAndParsePackages(localConfig);
+    const branchLockItem = await doBranchLock(
+      consumingPackagesFiltered,
+      consumedPackagesFiltered,
+      localConfig.branchLock
+    );
+    await initialiseRepos(
+      consumingPackagesFiltered.concat(consumedPackagesFiltered),
+      branchLockItem
+    );
+    lib.logHeader('PRELIMINARY CHECKS COMPLETED, UPDATING CONSUMING PACKAGES');
+    const opts = {
+      consumedPackagesFiltered: consumedPackagesFiltered,
+      consumingPackagesFiltered: consumingPackagesFiltered,
+    };
+    await processPackages('consumed', opts);
+    await processPackages('consuming', opts);
 
-      for (let consumingPackage of consumingPackagesFiltered) {
-        consumingPackage = lib.parsePackageConfig(consumingPackage);
-        await lib.initialiseRepo(
-          consumingPackage,
-          branchLockItem,
-          consumedPackage
-        );
-        consumingPackages.push(consumingPackage);
-      }
-      lib.logHeader(
-        'PRELIMINARY CHECKS COMPLETED, UPDATING CONSUMING PACKAGES'
-      );
-      if (consumedPackage.commit) {
-        await lib.commitPackage(consumedPackage);
-      } else {
-        console.log(
-          chalk[consumedPackage.logColour](
-            `[${consumedPackage.name}] code not committed.`
-          )
-        );
-      }
-
-      await lib.pushPackage(consumedPackage);
-      consumedPackage.commitSHA = await lib.latestCommitHash(consumedPackage);
-      for (const consumingPackage of consumingPackages) {
-        try {
-          const result = consumingPackage;
-
-          let comsumedPackageVersion;
-          if (consumedPackage.updatedDependencyVersionFunc) {
-            comsumedPackageVersion =
-              await consumedPackage.updatedDependencyVersionFunc(
-                consumedPackage
-              );
-          } else {
-            comsumedPackageVersion = await lib.latestCommitHash(
-              consumedPackage
-            );
-          }
-          lib.updateDependencyVersion(
-            consumedPackage,
-            comsumedPackageVersion,
-            consumingPackage
-          );
-          if (finalConsumedPackage) {
-            await lib.bumpVersion(consumingPackage);
-            if (consumingPackage.customEditsFunc) {
-              await consumingPackage.customEditsFunc(
-                consumingPackage,
-                consumedPackage,
-                comsumedPackageVersion
-              );
-            }
-            if (consumingPackage.commit) {
-              await lib.commitPackage(consumingPackage);
-            } else {
-              console.log(
-                chalk[consumingPackage.logColour](
-                  `[${consumingPackage.name}] code not committed.`
-                )
-              );
-            }
-            if (consumingPackage.push) {
-              await lib.pushPackage(consumingPackage);
-            } else if (consumingPackage.commit) {
-              console.log(
-                chalk[consumingPackage.logColour](
-                  `[${consumingPackage.name}] code committed but not pushed.`
-                )
-              );
-            }
-            if (consumingPackage.tag) {
-              await lib.tagLatestCommit(consumingPackage);
-            }
-            result.latestTag = await lib.latestTag(consumingPackage);
-            result.dependencySHA = comsumedPackageVersion;
-
-            result.commitSHA = await lib.latestCommitHash(consumingPackage);
-            result.latestCommitMessage = (
-              await lib.latestCommit(consumingPackage)
-            ).message;
-            result.gitState = lib.gitState(consumingPackage);
-            results.push(result);
-          }
-        } catch (err) {
-          console.log(chalk.red(err));
-        }
-      }
-      return results;
-    } catch (err) {
-      console.log(chalk.red(err));
-    }
+    return results;
+  } catch (err) {
+    console.log(chalk.red(err));
   }
 };

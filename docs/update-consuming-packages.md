@@ -9,7 +9,7 @@ The two items in the `localConsumingPackages` array below show the full list of 
 ```javascript
 const updateConsumingPackages = require('npm-git-utils/update-consuming-packages');
 const options = {
-  dependentPackage: {
+  consumedPackages: [{
     localRepoPath: './shared-dependency', // Path to the git repo of the NPM dependency.
     commitMessage: 'Update styles', // Commit message for the NPM dependency
     amendLatestCommit: null, // Optional, default = false. can be true or 'no-edit'. If present, the commit option is forced to true. If true, the latest commit will be amended with the changes, and the commmit message will be updated to the value of the commitMessage option. if 'no-edit', latest commit will be amended with the changes, and the commit message will not be changed.
@@ -18,8 +18,8 @@ const options = {
     dependentPackageVersionFunc(dependentPackage) {
       return `***Commit SHA***`.
     } // Optional. By default, after pushing the dependent package, the script will fetch the latest commit in the branch that has just been pushed, and update the version of the dependency to that SHA in the consumung package. If this function is passed, the result of this function will be used instead. An example of where this is useful is if you source code and build branches are different.
-  },
-  localConsumingPackages: [
+  }],
+  consumingPackages: [
     {
       localRepoPath: './consuming-project-1', // Path to the git repo of the consuming package.
       skip: true, // Optional, default = false. If true, the package will be skipped.

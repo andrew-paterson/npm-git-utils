@@ -191,9 +191,18 @@ module.exports = {
     ) {
       throw `[${consumingPackageConfig.name}] ${dependentPackage.name} is not a dependency of ${consumingPackageConfig.name}`;
     }
-    const depType = (packageFile.dependencies || {})[dependentPackage.name]
-      ? 'dependencies'
-      : 'devDependencies';
+    let depType;
+    for (var key in packageFile) {
+      if (
+        packageFile[key][dependentPackage.name] &&
+        !packageFile[key][dependentPackage.name].startsWith('workspace:')
+      ) {
+        depType = key;
+      }
+    }
+    // depType = (packageFile.dependencies || {})[dependentPackage.name]
+    //   ? 'dependencies'
+    //   : 'devDependencies';
     const fromVersion =
       packageFile[depType][dependentPackage.name].split('#')[1];
     const dependentPackagePackageLink =
@@ -245,17 +254,40 @@ module.exports = {
     }
   },
 
-  currentBranchLockItem: async function (referencePackage, branchLockArray) {
-    const currentDependentBranch = (await referencePackage.git.branch())
-      .current;
-    const branchLockItem = branchLockArray.find(
-      (item) =>
-        (item[referencePackage.name] || '').trim() === currentDependentBranch
-    );
-    if (!branchLockItem) {
-      throw `No branch lock entry exists for branch with ${referencePackage.name} === ${currentDependentBranch}.`;
+  currentBranchLockItem: async function (
+    consumingPackages,
+    consumedPackages,
+    branchLockArray
+  ) {
+    const branchesMap = {};
+    for (var packageSet of [consumingPackages, consumedPackages]) {
+      for (var packageConfig of packageSet) {
+        branchesMap[packageConfig.name] = (
+          await packageConfig.git.branch()
+        ).current;
+      }
     }
-    return branchLockItem;
+    const matchingBranchLockItem = branchLockArray.find((branchLockItem) => {
+      return require('node:util').isDeepStrictEqual(
+        branchLockItem,
+        branchesMap
+      );
+    });
+
+    // const currentDependentBranch = (await referencePackage.git.branch())
+    //   .current;
+    // const branchLockItem = branchLockArray.find(
+    //   (item) =>
+    //     (item[referencePackage.name] || '').trim() === currentDependentBranch
+    // );
+    if (!matchingBranchLockItem) {
+      throw `No branch lock entry exists for branch with ${JSON.stringify(
+        branchesMap,
+        null,
+        2
+      )}.`;
+    }
+    return matchingBranchLockItem;
   },
 
   initialiseRepo: async function (
@@ -610,6 +642,9 @@ module.exports = {
             absolutePath,
             this.isMonoRepoWorkspace(filePath)
           );
+          if (final.pnpmLock.specifier.includes('workspace:')) {
+            final.workspace = true;
+          }
         }
         acc.push(final);
       }

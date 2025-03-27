@@ -9,6 +9,7 @@ module.exports = function (dirPath) {
       // This also defines the order of the props
       'name',
       'absolutePath',
+      'workspace',
       'gitState',
       'children',
     ]);

@@ -65,13 +65,17 @@ module.exports = async function (localConfig) {
     }
 
     await lib.pushPackage(localConfig.dependentPackage);
+    localConfig.dependentPackage.commitSHA = await lib.latestCommitHash(
+      localConfig.dependentPackage
+    );
     for (const consumingPackage of consumingPackages) {
       try {
         const result = consumingPackage;
+
         let dependentPackageVersion;
-        if (localConfig.dependentPackage.dependentPackageVersionFunc) {
+        if (localConfig.dependentPackage.updatedDependencyVersionFunc) {
           dependentPackageVersion =
-            await localConfig.dependentPackage.dependentPackageVersionFunc(
+            await localConfig.dependentPackage.updatedDependencyVersionFunc(
               localConfig.dependentPackage
             );
         } else {

@@ -275,10 +275,12 @@ module.exports = {
       ).current;
     }
     const matchingBranchLockItem = branchLockArray.find((branchLockItem) => {
-      return require('node:util').isDeepStrictEqual(
-        branchLockItem,
-        branchesMap
-      );
+      for (var key in branchesMap) {
+        if (!branchLockItem[key] || branchLockItem[key] !== branchesMap[key]) {
+          return false;
+        }
+      }
+      return true;
     });
     if (!matchingBranchLockItem) {
       throw `No branch lock entry matches the currently checkout branches of the included repos, which are as follows:\n${JSON.stringify(

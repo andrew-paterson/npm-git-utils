@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       chalk:
-        specifier: ^2.4.2
+        specifier: 2.4.2 =< 4.1.2
         version: 2.4.2
       git-repo-info:
         specifier: ^2.1.1

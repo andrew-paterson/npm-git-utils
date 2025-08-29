@@ -175,7 +175,7 @@ module.exports = {
     console.log(dependentPackagesSkippedGit);
   },
 
-  packageFilePath: function (packageConfig) {
+  mainPackageFilePath: function (packageConfig) {
     packageConfig.npmPackageSubDir = packageConfig.npmPackageSubDir || './';
     if (!packageConfig.npmPackageSubDir.startsWith('./')) {
       packageConfig.npmPackageSubDir = `./${packageConfig.npmPackageSubDir}`;
@@ -192,7 +192,7 @@ module.exports = {
     toVersion,
     consumingPackageConfig
   ) {
-    const packageFilePath = this.packageFilePath(consumingPackageConfig);
+    const packageFilePath = this.mainPackageFilePath(consumingPackageConfig);
     const packageFile = require(packageFilePath);
     if (
       !(packageFile.dependencies || {})[dependentPackage.name] &&
@@ -357,41 +357,6 @@ module.exports = {
     );
   },
 
-  branchLockPass: async function (
-    packageConfig,
-    branchLockItem,
-    referencePackageConfig
-  ) {
-    try {
-      if (!branchLockItem[packageConfig.name]) {
-        throw `[${
-          packageConfig.name
-        }] Error - the branch lock entry which includes ${
-          referencePackageConfig.name
-        }: ${
-          branchLockItem[referencePackageConfig.name]
-        }" does not specify a branch for ${packageConfig.name}.`;
-      }
-      const currentAppBranch = (await packageConfig.git.branch()).current;
-      if (branchLockItem[packageConfig.name] !== currentAppBranch) {
-        console.log(
-          chalk[packageConfig.logColour](
-            `[${
-              packageConfig.name
-            }] Switching from branch "${currentAppBranch}" to "${
-              branchLockItem[packageConfig.name]
-            }" as per branch lock entry.`
-          )
-        );
-        await packageConfig.git.checkout(branchLockItem[packageConfig.name]);
-      }
-      return (await packageConfig.git.branch()).current;
-    } catch (err) {
-      console.log(chalk.red(err));
-      throw err;
-    }
-  },
-
   latestCommit: async function (packageConfig) {
     const gitLog = await packageConfig.git.log();
     return (gitLog.all || [])[0] || {};
@@ -412,7 +377,7 @@ module.exports = {
     if (packageConfig.tagName) {
       newTag = packageConfig.tagName;
     } else {
-      const packageFilePath = this.packageFilePath(packageConfig);
+      const packageFilePath = this.mainPackageFilePath(packageConfig);
       const packageFile = require(packageFilePath);
       newTag = packageFile.version;
     }
@@ -458,12 +423,20 @@ module.exports = {
     return tags.split('\n').includes(tagName);
   },
 
+  bumpVersionPaths(packageConfig) {
+    return (packageConfig.packageFilesToUpdate || []).map((file) => {
+      return path.resolve(packageConfig.localRepoPath, file);
+    });
+  },
+
   bumpVersion: async function (packageConfig) {
     if (!(packageConfig.releaseType || packageConfig.preReleaseType)) {
       return;
     }
-    const packageFilePath = this.packageFilePath(packageConfig);
-    const packageFile = require(packageFilePath);
+    // Determine the new version number, based on prereleaseType, releaseType and the current version
+    let newVersion;
+    const mainPackageFilePath = this.mainPackageFilePath(packageConfig);
+    const mainPackageFile = require(mainPackageFilePath);
     const status = await packageConfig.git.status();
     const hasChangesToCommit = status.files.length > 0;
     if (!hasChangesToCommit) {
@@ -474,20 +447,21 @@ module.exports = {
       );
       return;
     }
-    const currentVersion = packageFile.version;
+    const currentVersion = mainPackageFile.version;
     const currentVersionNumber = (currentVersion.match(/(\d+.\d+.\d+)/) ||
       [])[0];
+
     if (packageConfig.preReleaseType) {
       const suffix = `${packageConfig.preReleaseType}.${moment().format(
         'YYYYMMDDHHmm'
       )}`;
-      packageFile.version = `${currentVersionNumber}-${suffix}`;
+      newVersion = `${currentVersionNumber}-${suffix}`;
     } else {
       const releaseType = packageConfig.releaseType || 'patch';
       const releaseTypes = ['major', 'minor', 'patch'];
       const matchIndex = releaseTypes.indexOf(releaseType);
       const numbers = currentVersion.match(/(\d*)\.(\d*)\.(\d*)/);
-      const newVersion = releaseTypes
+      newVersion = releaseTypes
         .map((_, index) => {
           if (index < matchIndex) {
             return numbers[index + 1];
@@ -498,18 +472,28 @@ module.exports = {
           }
         })
         .join('.');
-      packageFile.version = newVersion;
     }
-    fs.writeFileSync(
-      packageFilePath,
-      `${JSON.stringify(packageFile, null, 2).trim()}\n`
-    );
-    console.log(
-      chalk[packageConfig.logColour](
-        `[${packageConfig.name}] Updated version to ${packageFile.version} in package.json.`
-      )
-    );
-    return packageFile;
+    // Update the version in the relevant package.json files
+    const pathsToUpdate = this.bumpVersionPaths(packageConfig);
+    if (!pathsToUpdate.includes(mainPackageFilePath)) {
+      pathsToUpdate.unshift(mainPackageFilePath);
+    }
+    pathsToUpdate
+      .filter((filePath) => filePath.endsWith('package.json'))
+      .forEach((filePath) => {
+        const fileContents = require(filePath);
+        fileContents.version = newVersion;
+        fs.writeFileSync(
+          filePath,
+          `${JSON.stringify(fileContents, null, 2).trim()}\n`
+        );
+        console.log(
+          chalk[packageConfig.logColour](
+            `[${packageConfig.name}] Updated version to ${fileContents.version} in ${filePath}.`
+          )
+        );
+      });
+    return mainPackageFile;
   },
 
   isPrimitive(test) {
@@ -575,6 +559,7 @@ module.exports = {
       (pnpmDep) => pnpmDep.name === depName
     );
   },
+
   specifiedMatchesInstalledDep(item) {
     if (!item) {
       return;

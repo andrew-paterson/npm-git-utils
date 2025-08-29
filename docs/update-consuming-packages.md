@@ -11,10 +11,14 @@ const updateConsumingPackages = require('npm-git-utils/update-consuming-packages
 const options = {
   consumedPackages: [{
     localRepoPath: './shared-dependency', // Path to the git repo of the NPM dependency.
+    packageFilesToUpdate: null, // Optional. An array of paths to package.json files relative to the project root. If passed, each of these files, as well as the main package.json file for the project will have their version bumped, where relevant- that is, where releaseType or preReleaseType are passed.
     commitMessage: 'Update styles', // Commit message for the NPM dependency
     amendLatestCommit: null, // Optional, default = false. can be true or 'no-edit'. If present, the commit option is forced to true. If true, the latest commit will be amended with the changes, and the commmit message will be updated to the value of the commitMessage option. if 'no-edit', latest commit will be amended with the changes, and the commit message will not be changed.
     logColour: 'magenta', // Optional, default = 'cyan'. Colour of the console log messages relating to the NPM dependency.
     commit: true, // Optional, default = false Whether or not to commit any uncommitted changes. If false, the script will continue witht eh most recent commit.
+    releaseType: 'minor', // Optional, default = 'patch', can be 'minor' or 'major' as well. Defines how the version is bumped in the consuming package.json file. Overridden by preReleaseType if both are present.
+    preReleaseType: 'dev', // Opional, can be any string. If present, the version will be bumped in the consuming package.json file, by simply appending the string and datetime to the current version. If present, the releaseType option is ignored.
+    tag: true, // Optional. If true, the commit will be tagged with the current version in package.json
     customEditsFunc: async (
         packageConfig,
       ) => {}, // Optional. Must be an async function. If present, it will be the last function to run before the repo changes are committed. It will always run after any automated edits, such as version bumps.
@@ -26,7 +30,7 @@ const options = {
     {
       localRepoPath: './consuming-project-1', // Path to the git repo of the consuming package.
       npmPackageSubDir: './apps/nested-npm-project', // Optional, default = null. Required if the NPM project which consumes the dependency is nested within the git repo. Speficies the path to the NPM project relative to the localRepoPath.
-      commitMessage: 'Amedmed latest commit',
+      commitMessage: 'Amended latest commit',
       skip: true, // Optional, default = false. If true, the package will be skipped.
       commit: true, // Optional, default = false. If false, forces push to false as well.
       commitMessage: 'Update shared-dependency', // Optional, but required if commit or push is true, unless the amendLatestCommit is set to 'no-edit'
@@ -35,6 +39,7 @@ const options = {
       releaseType: 'minor', // Optional, default = 'patch', can be 'minor' or 'major' as well. Defines how the version is bumped in the consuming package.json file. Overridden by preReleaseType if both are present.
       preReleaseType: 'dev', // Opional, can be any string. If present, the version will be bumped in the consuming package.json file, by simply appending the string and datetime to the current version. If present, the releaseType option is ignored.
       tag: true, // Optional. If true, the commit will be tagged with the current version in package.json
+      packageFilesToUpdate: null, // Optional. An array of paths to package.json files relative to the project root. If passed, each of these files, as well as the main package.json file for the project will have their version bumped, where relevant- that is, where releaseType or preReleaseType are passed.
       pushTags: false, // Optional, default = true. Whether to push the tags after tagging
       logColour: 'green', // Optional, default = 'cyan'. Colour of the console log messages relating to the NPM dependency.
        customEditsFunc: async (

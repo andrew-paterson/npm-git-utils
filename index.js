@@ -234,21 +234,9 @@ module.exports = {
     const depType = (packageFile.dependencies || {})[dependentPackage.name]
       ? 'dependencies'
       : 'devDependencies';
-    const fromVersion =
-      packageFile[depType][dependentPackage.name].split('#')[1];
-    const dependentPackagePackageLink =
-      packageFile[depType][dependentPackage.name].split('#')[0];
+    const fromVersion = packageFile[depType][dependentPackage.name];
 
-    if (fromVersion === toVersion) {
-      console.log(
-        chalk[consumingPackageConfig.logColour](
-          `[${consumingPackageConfig.name} > ${npmPackageSubDir}] Version of ${dependentPackage.name} already set to ${toVersion}, no update required.`,
-        ),
-      );
-      return;
-    }
-    packageFile[depType][dependentPackage.name] =
-      `${dependentPackagePackageLink}#${toVersion}`;
+    packageFile[depType][dependentPackage.name] = toVersion;
     fs.writeFileSync(
       packageFilePath,
       `${JSON.stringify(packageFile, null, 2).trim()}\n`,

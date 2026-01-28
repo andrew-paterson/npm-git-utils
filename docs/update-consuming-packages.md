@@ -22,7 +22,7 @@ const options = {
     customEditsFunc: async (
         packageConfig,
       ) => {}, // Optional. Must be an async function. If present, it will be the last function to run before the repo changes are committed. It will always run after any automated edits, such as version bumps.
-    updatedConsumingpackageVersionFunc(dependentPackage) {
+    versionFn(dependentPackage) {
       return `***Commit SHA***`.
     } // Optional. By default, after pushing the dependent package, the script will fetch the latest commit in the branch that has just been pushed, and update the version of the dependency to that SHA in the consumung package. If this function is passed, the result of this function will be used instead. An example of where this is useful is if you source code and build branches are different.
   }],

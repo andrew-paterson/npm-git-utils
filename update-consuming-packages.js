@@ -66,13 +66,13 @@ async function processPackage(package, type, opts) {
     for (let consumedPackage of opts.consumedPackagesFiltered) {
       lib.updateDependencyVersions(
         consumedPackage,
-        consumedPackage.consumedSHA,
+        consumedPackage.consumedVersion,
         package,
       );
       result.dependencySHAs = result.dependencySHAs || [];
       result.dependencySHAs.push({
         name: consumedPackage.name,
-        sha: consumedPackage.consumedSHA,
+        sha: consumedPackage.consumedVersion,
       });
     }
   }
@@ -98,11 +98,10 @@ async function processPackage(package, type, opts) {
   }
   if (type === 'consumed') {
     package.commitSHA = await lib.latestCommitHash(package);
-    if (package.updatedConsumingPackageVersionFunc) {
-      package.consumedSHA =
-        await package.updatedConsumingPackageVersionFunc(package);
+    if (package.versionFn) {
+      package.consumedVersion = await package.versionFn(package);
     } else {
-      package.consumedSHA = package.commitSHA;
+      package.consumedVersion = package.commitSHA;
     }
   }
   if (package.tag) {

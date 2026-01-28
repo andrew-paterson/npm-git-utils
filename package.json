@@ -1,6 +1,6 @@
 {
   "name": "npm-git-utils",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "description": "A collection of node utility functions which help to automate the the process of committing and pushing NPM packages with git, updating dependency versions in package.json files, and viewing the git state of local repos",
   "main": "index.js",
   "scripts": {

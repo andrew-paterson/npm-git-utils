@@ -5,12 +5,12 @@ const results = [];
 async function doBranchLock(
   consumingPackagesFiltered,
   consumedPackagesFiltered,
-  branchLock
+  branchLock,
 ) {
   const branchLockItem = await lib.currentBranchLockItem(
     consumingPackagesFiltered,
     consumedPackagesFiltered,
-    branchLock
+    branchLock,
   );
   if (!branchLockItem) {
     return;
@@ -28,8 +28,8 @@ async function doBranchLock(
   lib.logHeader('BRANCH LOCK SUMMARY');
   console.log(
     chalk.white(
-      'The following is a breakdown of which branches will be updated in the listed repos.'
-    )
+      'The following is a breakdown of which branches will be updated in the listed repos.',
+    ),
   );
   console.log(chalk.yellow(JSON.stringify(displayBranchLockItem, null, 2)));
   return displayBranchLockItem;
@@ -64,10 +64,10 @@ async function processPackage(package, type, opts) {
   const result = package;
   if (type === 'consuming') {
     for (let consumedPackage of opts.consumedPackagesFiltered) {
-      lib.updateDependencyVersion(
+      lib.updateDependencyVersions(
         consumedPackage,
         consumedPackage.consumedSHA,
-        package
+        package,
       );
       result.dependencySHAs = result.dependencySHAs || [];
       result.dependencySHAs.push({
@@ -84,7 +84,7 @@ async function processPackage(package, type, opts) {
     await lib.commitPackage(package);
   } else {
     console.log(
-      chalk[package.logColour](`[${package.name}] code not committed.`)
+      chalk[package.logColour](`[${package.name}] code not committed.`),
     );
   }
   if (package.push) {
@@ -92,16 +92,15 @@ async function processPackage(package, type, opts) {
   } else if (package.commit) {
     console.log(
       chalk[package.logColour](
-        `[${package.name}] code committed but not pushed.`
-      )
+        `[${package.name}] code committed but not pushed.`,
+      ),
     );
   }
   if (type === 'consumed') {
     package.commitSHA = await lib.latestCommitHash(package);
     if (package.updatedConsumingPackageVersionFunc) {
-      package.consumedSHA = await package.updatedConsumingPackageVersionFunc(
-        package
-      );
+      package.consumedSHA =
+        await package.updatedConsumingPackageVersionFunc(package);
     } else {
       package.consumedSHA = package.commitSHA;
     }
@@ -123,11 +122,11 @@ module.exports = async function (localConfig) {
     const branchLockItem = await doBranchLock(
       consumingPackagesFiltered,
       consumedPackagesFiltered,
-      localConfig.branchLock
+      localConfig.branchLock,
     );
     await initialiseRepos(
       consumingPackagesFiltered.concat(consumedPackagesFiltered),
-      branchLockItem
+      branchLockItem,
     );
     lib.logHeader('PRELIMINARY CHECKS COMPLETED, UPDATING CONSUMING PACKAGES');
     const opts = {

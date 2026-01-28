@@ -30,19 +30,29 @@ module.exports = {
     packageConfig.actionsLog = packageConfig.actionsLog || [];
     packageConfig.localRepoPath = path.resolve(
       process.cwd(),
-      packageConfig.localRepoPath
+      packageConfig.localRepoPath,
     );
     packageConfig.name =
       packageConfig.name || path.basename(packageConfig.localRepoPath);
+    packageConfig.displayName = packageConfig.displayName || packageConfig.name;
     packageConfig.git = simpleGit({
       baseDir: packageConfig.localRepoPath,
     });
+    packageConfig.npmPackageSubDirs = packageConfig.npmPackageSubDirs || ['./'];
+    packageConfig.npmPackageSubDirs = packageConfig.npmPackageSubDirs.map(
+      (npmPackageSubDir) => {
+        if (!npmPackageSubDir.startsWith('./')) {
+          npmPackageSubDir = `./${npmPackageSubDir}`;
+        }
+        return npmPackageSubDir;
+      },
+    );
     packageConfig.logColour = packageConfig.logColour || 'cyan';
     if (!packageConfig.commit && packageConfig.push) {
       console.log(
         chalk[packageConfig.logColour](
-          `[${packageConfig.name}] Overriding "push" from true to false, as "commit" is set to false.`
-        )
+          `[${packageConfig.displayName}] Overriding "push" from true to false, as "commit" is set to false.`,
+        ),
       );
       packageConfig.push = false;
     }
@@ -50,13 +60,13 @@ module.exports = {
     if (!packageConfig.commit && packageConfig.tag) {
       console.log(
         chalk[packageConfig.logColour](
-          `[${packageConfig.name}] Overriding "tag" from true to false, as "commit" is set to false.`
-        )
+          `[${packageConfig.displayName}] Overriding "tag" from true to false, as "commit" is set to false.`,
+        ),
       );
       packageConfig.tag = false;
     }
     if (packageConfig.tag && packageConfig.pushTags === undefined) {
-      `[${packageConfig.name}] Applying default of true to "pushTags", because "tag" is true and "pushTags" is not set.`;
+      `[${packageConfig.displayName}] Applying default of true to "pushTags", because "tag" is true and "pushTags" is not set.`;
       packageConfig.pushTags = true;
     }
     return packageConfig;
@@ -66,8 +76,8 @@ module.exports = {
     if (!packageConfig.commit && packageConfig.amendLatestCommit) {
       console.log(
         chalk[packageConfig.logColour](
-          `[${packageConfig.name}] Forcing the amendlatestCommit option from ${packageConfig.amendLatestCommit} to false, as commit is set to false.`
-        )
+          `[${packageConfig.displayName}] Forcing the amendlatestCommit option from ${packageConfig.amendLatestCommit} to false, as commit is set to false.`,
+        ),
       );
       packageConfig.amendLatestCommit = false;
       return;
@@ -75,8 +85,8 @@ module.exports = {
     await packageConfig.git.add('.');
     console.log(
       chalk[packageConfig.logColour](
-        `[${packageConfig.name}] Added untracked files`
-      )
+        `[${packageConfig.displayName}] Added untracked files`,
+      ),
     );
     let packageCommitMessage = packageConfig.commitMessage;
     const commitOptions = {};
@@ -89,7 +99,7 @@ module.exports = {
     }
     const packageCommitResult = await packageConfig.git.commit(
       packageCommitMessage,
-      commitOptions
+      commitOptions,
     );
     const newSha = packageCommitResult.commit.length
       ? packageCommitResult.commit
@@ -100,9 +110,9 @@ module.exports = {
           `[${
             packageConfig.name
           }] Amend latest commit with an updated commit message ${await this.latestCommitHash(
-            packageConfig
-          )}`
-        )
+            packageConfig,
+          )}`,
+        ),
       );
     } else if (newSha) {
       if (packageConfig.amendLatestCommit === 'no-edit') {
@@ -112,17 +122,17 @@ module.exports = {
               packageConfig.name
             }] Amend latest commit with the same commit message to ${newSha} in branch ${
               packageCommitResult.branch
-            }: ${JSON.stringify(packageCommitResult.summary)}`
-          )
+            }: ${JSON.stringify(packageCommitResult.summary)}`,
+          ),
         );
       } else {
         packageConfig.actionsLog.push('Committing succeeded');
         console.log(
           chalk[packageConfig.logColour](
-            `[${packageConfig.name}] Add commit ${newSha} in branch ${
+            `[${packageConfig.displayName}] Add commit ${newSha} in branch ${
               packageCommitResult.branch
-            }: ${JSON.stringify(packageCommitResult.summary)}`
-          )
+            }: ${JSON.stringify(packageCommitResult.summary)}`,
+          ),
         );
       }
     } else {
@@ -132,9 +142,9 @@ module.exports = {
           `[${
             packageConfig.name
           }] Nothing to commit - head is still at ${await this.latestCommitHash(
-            packageConfig
-          )}`
-        )
+            packageConfig,
+          )}`,
+        ),
       );
     }
   },
@@ -142,7 +152,7 @@ module.exports = {
   logHeader(string, logColour = 'white') {
     const separatorLine = '-'.repeat(string.length);
     console.log(
-      chalk[logColour](`${separatorLine}\n${string}\n${separatorLine}`)
+      chalk[logColour](`${separatorLine}\n${string}\n${separatorLine}`),
     );
   },
 
@@ -154,7 +164,7 @@ module.exports = {
           latestCommitSHA: result.commitSHA,
           latestCommitMessage: result.latestCommitMessage,
         };
-      })
+      }),
     );
     if (!skipped) {
       return;
@@ -175,43 +185,55 @@ module.exports = {
     console.log(dependentPackagesSkippedGit);
   },
 
-  mainPackageFilePath: function (packageConfig) {
-    packageConfig.npmPackageSubDir = packageConfig.npmPackageSubDir || './';
-    if (!packageConfig.npmPackageSubDir.startsWith('./')) {
-      packageConfig.npmPackageSubDir = `./${packageConfig.npmPackageSubDir}`;
-    }
+  mainPackageFilePath: function (packageConfig, npmPackageSubDir) {
     return path.resolve(
       packageConfig.localRepoPath,
-      packageConfig.npmPackageSubDir || '',
-      'package.json'
+      npmPackageSubDir || '',
+      'package.json',
     );
+  },
+
+  updateDependencyVersions: function (
+    dependentPackage,
+    toVersion,
+    consumingPackageConfig,
+  ) {
+    consumingPackageConfig.npmPackageSubDirs.forEach((npmPackageSubDir) => {
+      this.updateDependencyVersion(
+        dependentPackage,
+        toVersion,
+        consumingPackageConfig,
+        npmPackageSubDir,
+      );
+    });
   },
 
   updateDependencyVersion: function (
     dependentPackage,
     toVersion,
-    consumingPackageConfig
+    consumingPackageConfig,
+    npmPackageSubDir,
   ) {
-    const packageFilePath = this.mainPackageFilePath(consumingPackageConfig);
+    const packageFilePath = this.mainPackageFilePath(
+      consumingPackageConfig,
+      npmPackageSubDir,
+    );
     const packageFile = require(packageFilePath);
     if (
       !(packageFile.dependencies || {})[dependentPackage.name] &&
       !(packageFile.devDependencies || {})[dependentPackage.name]
     ) {
-      throw `[${consumingPackageConfig.name}] ${dependentPackage.name} is not a dependency of ${consumingPackageConfig.name}`;
+      console.log(
+        chalk[consumingPackageConfig.logColour](
+          `[${consumingPackageConfig.name} > ${npmPackageSubDir}] ${dependentPackage.name} is not a dependency of ${consumingPackageConfig.name} > ${npmPackageSubDir}, skipping`,
+        ),
+      );
+      return;
     }
-    let depType;
-    for (var key in packageFile) {
-      if (
-        packageFile[key][dependentPackage.name] &&
-        !packageFile[key][dependentPackage.name].startsWith('workspace:')
-      ) {
-        depType = key;
-      }
-    }
-    // depType = (packageFile.dependencies || {})[dependentPackage.name]
-    //   ? 'dependencies'
-    //   : 'devDependencies';
+
+    const depType = (packageFile.dependencies || {})[dependentPackage.name]
+      ? 'dependencies'
+      : 'devDependencies';
     const fromVersion =
       packageFile[depType][dependentPackage.name].split('#')[1];
     const dependentPackagePackageLink =
@@ -220,22 +242,21 @@ module.exports = {
     if (fromVersion === toVersion) {
       console.log(
         chalk[consumingPackageConfig.logColour](
-          `[${consumingPackageConfig.name}] Version of ${dependentPackage.name} already set to ${toVersion}, no update required.`
-        )
+          `[${consumingPackageConfig.name} > ${npmPackageSubDir}] Version of ${dependentPackage.name} already set to ${toVersion}, no update required.`,
+        ),
       );
       return;
     }
-    packageFile[depType][
-      dependentPackage.name
-    ] = `${dependentPackagePackageLink}#${toVersion}`;
+    packageFile[depType][dependentPackage.name] =
+      `${dependentPackagePackageLink}#${toVersion}`;
     fs.writeFileSync(
       packageFilePath,
-      `${JSON.stringify(packageFile, null, 2).trim()}\n`
+      `${JSON.stringify(packageFile, null, 2).trim()}\n`,
     );
     console.log(
       chalk[consumingPackageConfig.logColour](
-        `[${consumingPackageConfig.name}] Updated version of ${dependentPackage.name} dependency from ${fromVersion} to ${toVersion}`
-      )
+        `[${consumingPackageConfig.name} > ${npmPackageSubDir}] Updated version of ${dependentPackage.name} dependency from ${fromVersion} to ${toVersion}`,
+      ),
     );
   },
 
@@ -255,8 +276,8 @@ module.exports = {
       packageConfig.actionsLog.push('Pushing succeeded');
       console.log(
         chalk[packageConfig.logColour](
-          `[${packageConfig.name}] ${parentPackagePushMessage}`
-        )
+          `[${packageConfig.displayName}] ${parentPackagePushMessage}`,
+        ),
       );
     } catch (err) {
       packageConfig.actionsLog.push('Pushing failed');
@@ -266,7 +287,7 @@ module.exports = {
   currentBranchLockItem: async function (
     consumingPackages,
     consumedPackages,
-    branchLockArray
+    branchLockArray,
   ) {
     const branchesMap = {};
     for (var packageConfig of consumingPackages.concat(consumedPackages)) {
@@ -286,7 +307,7 @@ module.exports = {
       throw `No branch lock entry matches the currently checkout branches of the included repos, which are as follows:\n${JSON.stringify(
         branchesMap,
         null,
-        2
+        2,
       )}`;
     }
     return matchingBranchLockItem;
@@ -311,13 +332,21 @@ module.exports = {
       remoteCommits.indexOf(localCommits[0]) < 0
     ) {
       // Remote and local have diverged
-      throw `[${packageConfig.name}] ${branch} and origin/${branch} have diverged. This must be resolved before continuing.`;
+      if (packageConfig.commit) {
+        throw `[${packageConfig.displayName}] ${branch} and origin/${branch} have diverged. Either set commit to false for this package, or resolve the conflicts in the repo manually, before trying again.`;
+      } else {
+        console.log(
+          chalk[packageConfig.logColour](
+            `[${packageConfig.displayName}] ${branch} and origin/${branch} have diverged. This will need to be resolved before committing and pushing this repo. The script will continue, as commit is not set to true for this package.`,
+          ),
+        );
+      }
     } else if (localCommits[0] === remoteCommits[0]) {
       // Local is up top date with remote
       console.log(
         chalk[packageConfig.logColour](
-          `[${packageConfig.name}] ${branch} is up to date with origin/${branch}.`
-        )
+          `[${packageConfig.displayName}] ${branch} is up to date with origin/${branch}.`,
+        ),
       );
     } else if (
       localCommits.indexOf(remoteCommits[0]) > -1 &&
@@ -326,8 +355,8 @@ module.exports = {
       // Local ahead of remote
       console.log(
         chalk[packageConfig.logColour](
-          `[${packageConfig.name}] ${branch} is ahead of origin/${branch} and can be pushed.`
-        )
+          `[${packageConfig.displayName}] ${branch} is ahead of origin/${branch} and can be pushed.`,
+        ),
       );
     } else if (
       remoteCommits.indexOf(localCommits[0]) > -1 &&
@@ -336,24 +365,32 @@ module.exports = {
       // Remote ahead of local
       console.log(
         chalk[packageConfig.logColour](
-          `[${packageConfig.name}] origin/${branch} is ahead of ${branch}.`
-        )
+          `[${packageConfig.displayName}] origin/${branch} is ahead of ${branch}.`,
+        ),
       );
       if ((await packageConfig.git.status()).isClean()) {
         await packageConfig.git.pull();
         console.log(
           chalk[packageConfig.logColour](
-            `[${packageConfig.name}] Pulled ${branch} branch.`
-          )
+            `[${packageConfig.displayName}] Pulled ${branch} branch.`,
+          ),
         );
       } else {
-        throw `[${packageConfig.name}] origin/${branch} is ahead of ${branch} but ${branch} has uncommitted changes. This must be resolved before continuing.`;
+        if (packageConfig.commit) {
+          throw `[${packageConfig.displayName}] origin/${branch} is ahead of ${branch} but ${branch} has uncommitted changes. This must be resolved before continuing.`;
+        } else {
+          console.log(
+            chalk[packageConfig.logColour](
+              `[${packageConfig.displayName}] origin/${branch} is ahead of ${branch} but ${branch} has uncommitted changes. This will need to be resolved before committing and pushing this repo. The script will continue, as commit is not set to true for this package.`,
+            ),
+          );
+        }
       }
     }
     console.log(
       chalk[packageConfig.logColour](
-        `[${packageConfig.name}] ${branch} - initialisation complete.`
-      )
+        `[${packageConfig.displayName}] ${branch} - initialisation complete.`,
+      ),
     );
   },
 
@@ -390,8 +427,8 @@ module.exports = {
         packageConfig.actionsLog.push('Tagging succeeded');
         console.log(
           chalk[packageConfig.logColour](
-            `[${packageConfig.name}] Added tag ${newTag} to latest commit.`
-          )
+            `[${packageConfig.displayName}] Added tag ${newTag} to latest commit.`,
+          ),
         );
       } catch (err) {
         packageConfig.actionsLog.push('Tagging failed');
@@ -400,8 +437,8 @@ module.exports = {
       packageConfig.actionsLog.push('Tagging skipped');
       console.log(
         chalk[packageConfig.logColour](
-          `[${packageConfig.name}] Tag ${newTag} already exists.`
-        )
+          `[${packageConfig.displayName}] Tag ${newTag} already exists.`,
+        ),
       );
     }
     if (packageConfig.pushTags !== false) {
@@ -409,7 +446,9 @@ module.exports = {
         await packageConfig.git.push(['--tags']);
         packageConfig.actionsLog.push('Pushing tags succeeded');
         console.log(
-          chalk[packageConfig.logColour](`[${packageConfig.name}] Pushed tags.`)
+          chalk[packageConfig.logColour](
+            `[${packageConfig.displayName}] Pushed tags.`,
+          ),
         );
       } catch (err) {
         packageConfig.actionsLog.push('Pushing tags failed');
@@ -442,8 +481,8 @@ module.exports = {
     if (!hasChangesToCommit) {
       console.log(
         chalk[packageConfig.logColour](
-          `[${packageConfig.name}] Not updating version in package.json as ther repo has no chnages to commit.`
-        )
+          `[${packageConfig.displayName}] Not updating version in package.json as ther repo has no chnages to commit.`,
+        ),
       );
       return;
     }
@@ -453,7 +492,7 @@ module.exports = {
 
     if (packageConfig.preReleaseType) {
       const suffix = `${packageConfig.preReleaseType}.${moment().format(
-        'YYYYMMDDHHmm'
+        'YYYYMMDDHHmm',
       )}`;
       newVersion = `${currentVersionNumber}-${suffix}`;
     } else {
@@ -485,12 +524,12 @@ module.exports = {
         fileContents.version = newVersion;
         fs.writeFileSync(
           filePath,
-          `${JSON.stringify(fileContents, null, 2).trim()}\n`
+          `${JSON.stringify(fileContents, null, 2).trim()}\n`,
         );
         console.log(
           chalk[packageConfig.logColour](
-            `[${packageConfig.name}] Updated version to ${fileContents.version} in ${filePath}.`
-          )
+            `[${packageConfig.displayName}] Updated version to ${fileContents.version} in ${filePath}.`,
+          ),
         );
       });
     return mainPackageFile;
@@ -531,7 +570,7 @@ module.exports = {
           .filter(
             (dep) =>
               !newVersionDefaultPackageFile[depType] ||
-              !newVersionDefaultPackageFile[depType][dep]
+              !newVersionDefaultPackageFile[depType][dep],
           )
           .reduce((obj, dep) => {
             obj[dep] = packageFileToCheck[depType][dep];
@@ -556,7 +595,7 @@ module.exports = {
 
   findPnpmDep(depName, filePath) {
     return this.allPnpmDeps(filePath).find(
-      (pnpmDep) => pnpmDep.name === depName
+      (pnpmDep) => pnpmDep.name === depName,
     );
   },
 
@@ -579,7 +618,7 @@ module.exports = {
       return false;
     }
     const workspaceJson = nodeSundries.yamlFileToJs(
-      path.resolve(dirPath, 'pnpm-workspace.yaml')
+      path.resolve(dirPath, 'pnpm-workspace.yaml'),
     );
     return (
       workspaceJson.packages.includes(`./${dirName}`) ||
@@ -592,11 +631,9 @@ module.exports = {
       ? path.dirname(filePath)
       : filePath;
     const pnpmLockJson = this.pnpmLockAsJson(pnpmLockLocation);
-    const packageFile = require(path.resolve(
-      process.cwd(),
-      filePath,
-      'package.json'
-    ));
+    const packageFile = require(
+      path.resolve(process.cwd(), filePath, 'package.json'),
+    );
     return depTypes.reduce((acc, depType) => {
       const obj = this.isMonoRepoWorkspace(filePath)
         ? pnpmLockJson.importers[path.basename(filePath)][depType]
@@ -613,12 +650,12 @@ module.exports = {
           const absolutePath = path.resolve(
             process.cwd(),
             filePath,
-            final.pnpmLock.version.replace('link:', '')
+            final.pnpmLock.version.replace('link:', ''),
           );
           final.absolutePath = absolutePath;
           final.gitState = this.checkGitState(
             absolutePath,
-            this.isMonoRepoWorkspace(filePath)
+            this.isMonoRepoWorkspace(filePath),
           );
           if (final.pnpmLock.specifier.includes('workspace:')) {
             final.workspace = true;
@@ -736,7 +773,7 @@ module.exports = {
         final.found =
           package.resolution.commit || package.resolution.tarball
             ? this.extractHash(
-                package.resolution.commit || package.resolution.tarball
+                package.resolution.commit || package.resolution.tarball,
               )
             : this.extractSemverString(key);
       }
@@ -747,7 +784,7 @@ module.exports = {
           version: this.expectedVsFoundOutput(final.expected, final.found),
           children: this.processChildPackages(
             childDepName,
-            childPackage.children
+            childPackage.children,
           ),
         };
   },
@@ -759,7 +796,7 @@ module.exports = {
 
   getLocalLinks(linkPath, acc = [], parent) {
     const locallyLinked = this.allPnpmDeps(linkPath).filter(
-      (dep) => dep.linked
+      (dep) => dep.linked,
     );
     if (!locallyLinked.length) {
       return acc;

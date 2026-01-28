@@ -29,7 +29,7 @@ const options = {
   consumingPackages: [
     {
       localRepoPath: './consuming-project-1', // Path to the git repo of the consuming package.
-      npmPackageSubDir: './apps/nested-npm-project', // Optional, default = null. Required if the NPM project which consumes the dependency is nested within the git repo. Speficies the path to the NPM project relative to the localRepoPath.
+      npmPackageSubDirs: ['./apps/nested-npm-project'], // Optional, default = ['./']. Required if the NPM project/s which consume the dependency are nested within the git repo. Specifies an array of paths to the consuming NPM projects relative to the localRepoPath. Note that the script will never add a dependency to a package file which does not already have it.
       commitMessage: 'Amended latest commit',
       skip: true, // Optional, default = false. If true, the package will be skipped.
       commit: true, // Optional, default = false. If false, forces push to false as well.

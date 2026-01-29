@@ -64,19 +64,15 @@ async function processPackage(package, type, opts) {
   const result = package;
   if (type === 'consuming') {
     for (let consumedPackage of opts.consumedPackagesFiltered) {
-      lib.updateDependencyVersions(
-        consumedPackage,
-        consumedPackage.consumedVersion,
-        package,
-      );
-      result.dependencySHAs = result.dependencySHAs || [];
-      result.dependencySHAs.push({
-        name: consumedPackage.name,
-        sha: consumedPackage.consumedVersion,
-      });
+      await lib.updateDependencyVersions(consumedPackage, package);
     }
   }
+  package.previousPackageJsonVersion =
+    await lib.getCurrentPackageVersion(package);
+
   await lib.bumpVersion(package);
+  package.updatedPackageJsonVersion =
+    await lib.getCurrentPackageVersion(package);
   if (package.customEditsFunc) {
     await package.customEditsFunc(package);
   }
@@ -99,11 +95,6 @@ async function processPackage(package, type, opts) {
   if (type === 'consumed') {
     package.packageJsonVersion = await lib.getCurrentPackageVersion(package);
     package.commitSHA = await lib.latestCommitHash(package);
-    if (package.versionFn) {
-      package.consumedVersion = await package.versionFn(package);
-    } else {
-      package.consumedVersion = await lib.getCurrentPackageVersion(package);
-    }
   }
   if (package.tag) {
     await lib.tagLatestCommit(package);

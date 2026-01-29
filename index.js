@@ -193,24 +193,18 @@ module.exports = {
     );
   },
 
-  updateDependencyVersions: function (
-    consumedPackage,
-    toVersion,
-    consumingPackageConfig,
-  ) {
-    consumingPackageConfig.npmPackageSubDirs.forEach((npmPackageSubDir) => {
-      this.updateDependencyVersion(
+  async updateDependencyVersions(consumedPackage, consumingPackageConfig) {
+    for (var npmPackageSubDir of consumingPackageConfig.npmPackageSubDirs) {
+      await this.updateDependencyVersion(
         consumedPackage,
-        toVersion,
         consumingPackageConfig,
         npmPackageSubDir,
       );
-    });
+    }
   },
 
-  updateDependencyVersion: function (
+  async updateDependencyVersion(
     consumedPackage,
-    toVersion,
     consumingPackageConfig,
     npmPackageSubDir,
   ) {
@@ -235,13 +229,20 @@ module.exports = {
       ? 'dependencies'
       : 'devDependencies';
     const fromVersion = packageFile[depType][consumedPackage.name];
-    if (
-      this.isSemverString(toVersion) &&
-      this.isSemverString(fromVersion) &&
-      !this.extractSemverType(toVersion).length
-    ) {
-      toVersion = `${this.extractSemverType(fromVersion)}${toVersion}`;
-    }
+    const toVersion = await this.getToVersion(
+      consumedPackage,
+      consumingPackageConfig,
+      fromVersion,
+    );
+
+    consumingPackageConfig.dependencySHAs =
+      consumingPackageConfig.dependencySHAs || [];
+    consumingPackageConfig.dependencySHAs.push({
+      subdir: npmPackageSubDir,
+      name: consumedPackage.name,
+      version: toVersion,
+    });
+
     packageFile[depType][consumedPackage.name] = toVersion;
     fs.writeFileSync(
       packageFilePath,
@@ -254,14 +255,30 @@ module.exports = {
     );
   },
 
+  async getToVersion(consumedPackage, consumingPackage, fromVersion) {
+    const fromVersionSemverType = this.extractSemverType(fromVersion);
+    if (consumedPackage.versionFn) {
+      return await consumedPackage.versionFn(
+        consumedPackage,
+        consumingPackage,
+        fromVersion,
+        fromVersionSemverType,
+      );
+    } else {
+      let toVersion = consumedPackage.updatedPackageJsonVersion;
+      if (this.isSemverString(toVersion) && this.isSemverString(fromVersion)) {
+        toVersion = `${fromVersionSemverType}${toVersion}`;
+      }
+      return toVersion;
+    }
+  },
+
   getCurrentPackageVersion(packageConfig) {
     const pathToFile = path.resolve(
       packageConfig.localRepoPath,
       'package.json',
     );
-    console.log(pathToFile);
     const packageFile = require(pathToFile);
-    console.log(packageFile.version);
     return packageFile.version;
   },
 
@@ -717,6 +734,9 @@ module.exports = {
   },
 
   extractSemverType(string) {
+    if (!this.isSemverString(string)) {
+      return '';
+    }
     if (typeof string !== 'string' || string.length === 0) return '';
     const s = string.trim();
     const first = s[0];

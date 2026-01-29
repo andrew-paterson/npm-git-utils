@@ -170,19 +170,19 @@ module.exports = {
       return;
     }
     console.log('SKIPPED');
-    const dependentPackagesSkippedGit = [];
+    const consumedPackagesSkippedGit = [];
     for (const item of skipped) {
       const repoPath = path.resolve(process.cwd(), item.localRepoPath);
       item.name = path.basename(item.localRepoPath);
       item.git = simpleGit({
         baseDir: repoPath,
       });
-      dependentPackagesSkippedGit.push({
+      consumedPackagesSkippedGit.push({
         app: path.basename(item.localRepoPath),
         gitState: this.gitState(item),
       });
     }
-    console.log(dependentPackagesSkippedGit);
+    console.log(consumedPackagesSkippedGit);
   },
 
   mainPackageFilePath: function (packageConfig, npmPackageSubDir) {
@@ -194,13 +194,13 @@ module.exports = {
   },
 
   updateDependencyVersions: function (
-    dependentPackage,
+    consumedPackage,
     toVersion,
     consumingPackageConfig,
   ) {
     consumingPackageConfig.npmPackageSubDirs.forEach((npmPackageSubDir) => {
       this.updateDependencyVersion(
-        dependentPackage,
+        consumedPackage,
         toVersion,
         consumingPackageConfig,
         npmPackageSubDir,
@@ -209,7 +209,7 @@ module.exports = {
   },
 
   updateDependencyVersion: function (
-    dependentPackage,
+    consumedPackage,
     toVersion,
     consumingPackageConfig,
     npmPackageSubDir,
@@ -220,32 +220,49 @@ module.exports = {
     );
     const packageFile = require(packageFilePath);
     if (
-      !(packageFile.dependencies || {})[dependentPackage.name] &&
-      !(packageFile.devDependencies || {})[dependentPackage.name]
+      !(packageFile.dependencies || {})[consumedPackage.name] &&
+      !(packageFile.devDependencies || {})[consumedPackage.name]
     ) {
       console.log(
         chalk[consumingPackageConfig.logColour](
-          `[${consumingPackageConfig.name} > ${npmPackageSubDir}] ${dependentPackage.name} is not a dependency of ${consumingPackageConfig.name} > ${npmPackageSubDir}, skipping`,
+          `[${consumingPackageConfig.name} > ${npmPackageSubDir}] ${consumedPackage.name} is not a dependency of ${consumingPackageConfig.name} > ${npmPackageSubDir}, skipping`,
         ),
       );
       return;
     }
 
-    const depType = (packageFile.dependencies || {})[dependentPackage.name]
+    const depType = (packageFile.dependencies || {})[consumedPackage.name]
       ? 'dependencies'
       : 'devDependencies';
-    const fromVersion = packageFile[depType][dependentPackage.name];
-
-    packageFile[depType][dependentPackage.name] = toVersion;
+    const fromVersion = packageFile[depType][consumedPackage.name];
+    if (
+      this.isSemverString(toVersion) &&
+      this.isSemverString(fromVersion) &&
+      !this.extractSemverType(toVersion).length
+    ) {
+      toVersion = `${this.extractSemverType(fromVersion)}${toVersion}`;
+    }
+    packageFile[depType][consumedPackage.name] = toVersion;
     fs.writeFileSync(
       packageFilePath,
       `${JSON.stringify(packageFile, null, 2).trim()}\n`,
     );
     console.log(
       chalk[consumingPackageConfig.logColour](
-        `[${consumingPackageConfig.name} > ${npmPackageSubDir}] Updated version of ${dependentPackage.name} dependency from ${fromVersion} to ${toVersion}`,
+        `[${consumingPackageConfig.name} > ${npmPackageSubDir}] Updated version of ${consumedPackage.name} dependency from ${fromVersion} to ${toVersion}`,
       ),
     );
+  },
+
+  getCurrentPackageVersion(packageConfig) {
+    const pathToFile = path.resolve(
+      packageConfig.localRepoPath,
+      'package.json',
+    );
+    console.log(pathToFile);
+    const packageFile = require(pathToFile);
+    console.log(packageFile.version);
+    return packageFile.version;
   },
 
   pushPackage: async function (packageConfig) {
@@ -699,12 +716,25 @@ module.exports = {
     return string.match(versionRegex)[1];
   },
 
+  extractSemverType(string) {
+    if (typeof string !== 'string' || string.length === 0) return '';
+    const s = string.trim();
+    const first = s[0];
+    if (first === '^' || first === '~') return first;
+    return '';
+  },
+
   extractSemverString(string) {
     const versionRegex = /.{0,1}[0-9]+\.[0-9]+\.[0-9]+/;
     if (!string.match(versionRegex)) {
       return false;
     }
     return string.match(versionRegex)[0];
+  },
+
+  isSemverString(string) {
+    const versionRegex = /.{0,1}[0-9]+\.[0-9]+\.[0-9]+/;
+    return versionRegex.test(string);
   },
 
   processChildPackages(parent, children) {

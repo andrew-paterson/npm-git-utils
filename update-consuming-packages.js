@@ -97,11 +97,12 @@ async function processPackage(package, type, opts) {
     );
   }
   if (type === 'consumed') {
+    package.packageJsonVersion = await lib.getCurrentPackageVersion(package);
     package.commitSHA = await lib.latestCommitHash(package);
     if (package.versionFn) {
       package.consumedVersion = await package.versionFn(package);
     } else {
-      package.consumedVersion = package.commitSHA;
+      package.consumedVersion = await lib.getCurrentPackageVersion(package);
     }
   }
   if (package.tag) {
